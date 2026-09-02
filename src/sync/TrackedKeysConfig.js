@@ -6,14 +6,18 @@ export class TrackedKeysConfig {
     this.path = path;
   }
 
-  load() {
-    console.log(`[TrackedKeysConfig.load] step 1: reading ${this.path}`);
-    if (!fs.existsSync(this.path)) {
-      console.log('[TrackedKeysConfig.load] step 2: file missing, returning empty tracked_keys');
-      return [];
+  load(data) {
+    if (data === undefined) {
+      console.log(`[TrackedKeysConfig.load] step 1: reading ${this.path}`);
+      if (!fs.existsSync(this.path)) {
+        console.log('[TrackedKeysConfig.load] step 2: file missing, returning empty tracked_keys');
+        return [];
+      }
+      console.log('[TrackedKeysConfig.load] step 2: parsing TOML via smol-toml');
+      data = parse(fs.readFileSync(this.path, 'utf8'));
+    } else {
+      console.log('[TrackedKeysConfig.load] step 1: using caller-supplied pre-parsed TOML');
     }
-    console.log('[TrackedKeysConfig.load] step 2: parsing TOML via smol-toml');
-    const data = parse(fs.readFileSync(this.path, 'utf8'));
     return data.jira?.tracked_keys ?? [];
   }
 

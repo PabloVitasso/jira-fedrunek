@@ -6,14 +6,21 @@ export class ProjectConfig {
     this.path = path;
   }
 
-  load() {
-    console.log(`[ProjectConfig.load] step 1: reading ${this.path}`);
-    if (!fs.existsSync(this.path)) {
-      console.log('[ProjectConfig.load] step 2: file missing, returning empty defaults');
-      return { cloudId: undefined, confluence: { spaceKeys: [], watchPages: [], watchDirs: [] } };
+  load(data) {
+    if (data === undefined) {
+      console.log(`[ProjectConfig.load] step 1: reading ${this.path}`);
+      if (!fs.existsSync(this.path)) {
+        console.log('[ProjectConfig.load] step 2: file missing, returning empty defaults');
+        return {
+          cloudId: undefined,
+          confluence: { spaceKeys: [], watchPages: [], watchDirs: [] },
+        };
+      }
+      console.log('[ProjectConfig.load] step 2: parsing TOML via smol-toml');
+      data = parse(fs.readFileSync(this.path, 'utf8'));
+    } else {
+      console.log('[ProjectConfig.load] step 1: using caller-supplied pre-parsed TOML');
     }
-    console.log('[ProjectConfig.load] step 2: parsing TOML via smol-toml');
-    const data = parse(fs.readFileSync(this.path, 'utf8'));
     const confluence = data.confluence ?? {};
     console.log('[ProjectConfig.load] step 3: extracting cloud_id and [confluence] targets');
     return {

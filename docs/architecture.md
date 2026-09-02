@@ -99,6 +99,12 @@ src/
     FolderWalker.js               CQL-ancestor descendant pagination, pure orchestration
     ConfluenceSyncEngine.js        page/dir/dirs/pages/sync modes, manifest diffing, confirmBulk,
                                    CONTENTS.md rebuild
+    timestamp.js                   normalizeTimestamp(ts) — canonical ISO string, shared by
+                                   FolderWalker (CQL lastModified) and ConfluenceSyncEngine (CQL
+                                   lastModified + REST version.createdAt) so a page's staleness
+                                   key compares equal regardless of which API populated it
+    webui.js                       spaceKeyFromWebui(webui) — shared by FolderWalker and
+                                   ConfluenceSyncEngine.syncPage, was duplicated verbatim before
   markdown/
     MarkdownFormatter.js         buildFrontmatter, buildIssueBody, formatComment, buildMarkdown,
                                  buildPageFrontmatter, buildToc — description/comment bodies are
@@ -186,6 +192,28 @@ under one noun (`gh <noun> <verb>` pattern) rather than a flat, growing set of t
 commands. `login` now connects `McpSession` (triggering the one-time browser consent if
 no cached token) and closes, instead of running a full OAuth 3LO exchange.
 
+**Architecture-audit fixes (2026-09-02):** see
+[20260902-architecture-audit-findings-done.md](features/20260902-architecture-audit-findings-done.md)
+for the full record. In brief: `SyncState.save()` now writes atomically
+(temp file + rename); `SyncState.load()` backs up corrupt state instead of
+silently discarding it; `McpSession`'s SIGINT/SIGTERM handlers await cleanup
+before exiting; `mcpSession.connect()` runs inside `index.js`'s try/finally;
+`CommentBlockParser.mergeComments` no longer duplicates `deleted_at`
+markers; page `lastModified` values are normalized to one canonical ISO
+string across CQL/REST sources (`timestamp.js`); `JiraClient`/
+`ConfluenceSyncEngine`/`FolderWalker` validate key/id format before
+interpolating into JQL/CQL; `spaceKeyFromWebui` was de-duplicated
+(`webui.js`); `jiraFedrunek.toml` is parsed once per invocation and shared
+between `ProjectConfig`/`TrackedKeysConfig`.
+
+**Tooling (2026-09-02):** ESLint (flat config, `eslint.config.js`) and
+Prettier (`.prettierrc.json`) were added, config adapted from the sibling
+`szkrabok` project with its Playwright/chromium-specific boundary rules
+(no direct `chromium.launch*`, no stealth imports, immutability
+restrictions) dropped as not applicable here. `npm run lint` / `lint:fix` /
+`format` / `format:check`. `sessions/` (gitignored Firefox-profile research
+artifacts) and `sync/` are excluded from both.
+
 ## Module ownership
 
 Per spec §7, each module has exactly one responsibility (SRP) and depends only on
@@ -197,8 +225,8 @@ or another module's internals directly:
 | `McpSession` | MCP Client/transport lifecycle, retry, cleanup | `@modelcontextprotocol/sdk`, `p-retry` |
 | `JiraClient` | Jira access via `searchJiraIssuesUsingJql` | injected `{ callTool }` (an `McpSession`-shaped object), not `McpSession` directly |
 | `ConfluenceClient` | Confluence MCP calls only | injected `{ callTool }`, mirrors `JiraClient`'s shape |
-| `FolderWalker` | CQL-ancestor descendant pagination | `ConfluenceClient` |
-| `ConfluenceSyncEngine` | Confluence orchestrator (page/dir/dirs/pages/sync modes) | `ConfluenceClient`, `FolderWalker`, `SyncState`, `FileWriter` |
+| `FolderWalker` | CQL-ancestor descendant pagination | `ConfluenceClient`, `timestamp.js`, `webui.js` |
+| `ConfluenceSyncEngine` | Confluence orchestrator (page/dir/dirs/pages/sync modes) | `ConfluenceClient`, `FolderWalker`, `SyncState`, `FileWriter`, `timestamp.js`, `webui.js` |
 | `MarkdownFormatter` | pure formatting, no I/O | nothing (description/comment/page bodies are already Markdown) |
 | `CommentBlockParser` | parse/merge existing file's comment blocks | `MarkdownFormatter.formatComment` (pure string ops otherwise) |
 | `SyncState` | `.sync-state.json` persistence, `{ issues, confluence }` | filesystem |

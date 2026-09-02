@@ -1,0 +1,4 @@
+node_modules/
+sync/
+coverage/
+package-lock.json

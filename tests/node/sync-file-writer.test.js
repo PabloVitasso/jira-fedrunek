@@ -26,13 +26,17 @@ test('TC-SYNC-FILEWRITER-002: read returns null for a missing file', () => {
   const dir = makeTempDir();
   const target = path.join(dir, 'does-not-exist.md');
   const writer = new FileWriter();
-  console.log(`[TC-SYNC-FILEWRITER-002] step 2: reading ${target} and asserting null (not a throw)`);
+  console.log(
+    `[TC-SYNC-FILEWRITER-002] step 2: reading ${target} and asserting null (not a throw)`
+  );
   const result = writer.read(target);
   assert.equal(result, null);
 });
 
 test('TC-SYNC-FILEWRITER-003: write creates missing parent directories', () => {
-  console.log('[TC-SYNC-FILEWRITER-003] step 1: creating a temp dir, target nested under an unmade subdir');
+  console.log(
+    '[TC-SYNC-FILEWRITER-003] step 1: creating a temp dir, target nested under an unmade subdir'
+  );
   const dir = makeTempDir();
   const target = path.join(dir, 'nested', 'deeper', 'PROJ-2.md');
   const writer = new FileWriter();

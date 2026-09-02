@@ -27,6 +27,18 @@ test suite / test case / entry-exit criteria). Scope is unit-level testing of ev
 module in [docs/architecture.md — module ownership](./architecture.md#module-ownership),
 built test-first per the project's [TDD rule](../CLAUDE.md).
 
+Two audit passes have added cases to existing suites since initial completion:
+[test-coverage-gaps](features/20260902-test-coverage-gaps-done.md) (branch/error-path
+gaps against source) and
+[architecture-audit-findings](features/20260902-architecture-audit-findings-done.md)
+(reliability/security fixes, e.g. `TC-SYNC-STATE-007/008`, `TC-MCP-SESSION-009/010`,
+`TC-MD-COMMENTPARSER-008`, `TC-CONFLUENCE-SYNC-015/016`, `TC-JIRA-CLIENT-006`,
+`TC-FOLDER-WALKER-006`, `TC-PROJECT-CONFIG-005`, `TC-SYNC-TRACKEDKEYS-010`) — no new
+suites, all landed within the table below. `timestamp.js`/`webui.js` (extracted during
+the second pass) are untested directly, same reasoning as `log.js`/`mcp/constants.js`
+in the test-coverage-gaps doc: trivial pure helpers, already exercised indirectly via
+`FolderWalker`/`ConfluenceSyncEngine`'s own suites.
+
 ## Test items
 
 The modules listed in `docs/architecture.md#module-ownership`: `McpSession`,

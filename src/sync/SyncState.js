@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 
 export class SyncState {
   constructor(path) {
@@ -19,7 +20,10 @@ export class SyncState {
       const parsed = JSON.parse(raw);
       this.state = { issues: parsed.issues ?? {}, confluence: parsed.confluence ?? {} };
     } catch (err) {
-      console.log(`[SyncState.load] step 3: invalid JSON (${err.message}), resetting to empty state`);
+      const backupPath = `${this.path}.corrupt-${Date.now()}`;
+      console.log(`[SyncState.load] step 3: invalid JSON (${err.message}), backing up corrupt file to ${backupPath}`);
+      fs.renameSync(this.path, backupPath);
+      console.error(`[SyncState.load] warning: ${this.path} contained invalid JSON and was reset. The corrupt file was backed up to ${backupPath}. Tracked history has been lost.`);
       this.state = { issues: {}, confluence: {} };
     }
   }
@@ -55,7 +59,10 @@ export class SyncState {
   }
 
   save() {
-    console.log(`[SyncState.save] step 1: JSON.stringify { issues, confluence } to ${this.path}`);
-    fs.writeFileSync(this.path, JSON.stringify(this.state, null, 2), 'utf8');
+    console.log(`[SyncState.save] step 1: JSON.stringify { issues, confluence } to a temp file`);
+    const tmpPath = `${this.path}.tmp-${crypto.randomUUID()}`;
+    fs.writeFileSync(tmpPath, JSON.stringify(this.state, null, 2), 'utf8');
+    console.log(`[SyncState.save] step 2: renaming temp file over ${this.path} atomically`);
+    fs.renameSync(tmpPath, this.path);
   }
 }

@@ -4,3 +4,4 @@ sync/*
 .env
 *.log
 jiraFedrunek.toml
+sessions/

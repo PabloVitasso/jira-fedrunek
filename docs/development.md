@@ -16,6 +16,7 @@ metadata:
 - [Running locally](#running-locally)
 - [Adding a new module](#adding-a-new-module)
 - [Coding style](#coding-style)
+- [Linting and formatting](#linting-and-formatting)
 - [Open items](#open-items)
 
 ## Doc frontmatter convention
@@ -122,12 +123,61 @@ tracked — wire that bare `sync` into cron/a systemd timer for "permanent" sync
   than one place, put it in a registry/map keyed by that string
 - **Fail fast — no silent fallbacks.** Don't substitute `?? {}` / `?? []` for data that
   should always be present (e.g. `fields.updated` on an issue). Let it throw
+- **Early exit only — no late exit.** Guard the exceptional/short-circuit case first
+  and return, instead of wrapping the main-path logic in `if (normalCase) { ... }`.
+  The body after the guard should read as the unindented happy path, not a nested
+  branch — see `syncDir`/`syncSpaces` in `src/confluence/ConfluenceSyncEngine.js`,
+  which guard on `stats.aborted` and return before the main-path logic instead of
+  nesting it inside `if (!stats.aborted)`
+- **No boolean flag parameters.** A parameter like `function sync(keys, force)` where
+  `force` selects between two internal code paths is a hidden late-exit branch in
+  disguise. Split into two named functions (or a strategy picked by the caller) instead
+  of threading a boolean through — see `alwaysConfirmBulk`/`promptConfirmBulk` in
+  `src/index.js` replacing the old `makeConfirmBulk(yes)`
+- **Extract-and-check untrusted external data, even without aborting.** When a value
+  comes from Jira/Confluence API responses and downstream code depends on it being
+  present (used as a directory name, a comparison key, etc.), don't let it decay
+  silently through a chained `a?.b?.c ?? fallback` buried inside a larger expression.
+  Pull it into a named variable near the top, check it, and `console.log` when it's
+  missing — even if the fallback itself is fine and the function should keep going.
+  This makes the gap between "field present" and "field silently defaulted" visible
+  in the debug log instead of only showing up as unexplained downstream behavior.
+  See `spaceKeyFromWebui` (`src/confluence/webui.js`) and the `createdAt` extraction
+  in `ConfluenceSyncEngine.syncSpaces`
+- **Bounded loops.** Any loop driven by external state (e.g. a server-provided
+  pagination cursor) must have a hard iteration cap, not just an implicit "server
+  will eventually stop sending a cursor" assumption — a looping/buggy cursor would
+  otherwise hang a cron-run sync forever with no operator visibility. See
+  `MAX_PAGINATION_LOOPS` in `FolderWalker.walkDescendants` and
+  `ConfluenceSyncEngine.syncSpaces`, which throw past 1000 pagination loops
+- **Function length cap.** No function longer than ~60 lines (JPL "Power of Ten" rule
+  4 — fits on one printed page). Enforced by `max-lines-per-function` in
+  `eslint.config.js`, scoped to `src/**` only (test bodies legitimately run longer)
 - **Constructor injection over imports.** Any module that talks to the network or
   filesystem takes its dependencies as constructor args (see spec §7) — this is what
   makes `SyncEngine`/`McpSession` testable without a live Jira/Confluence instance
 - **Every method logs its steps.** Each non-trivial method emits one `console.log`
   per logical step (`[ClassName.methodName] step N: ...`), not just entry/exit. This
   is how a sync run is debugged after the fact — there is no other logging layer
+
+## Linting and formatting
+
+```bash
+npm run lint          # eslint .
+npm run lint:fix       # eslint . --fix
+npm run format         # prettier --write "{src,tests}/**/*.js" "*.js"
+npm run format:check   # prettier --check "{src,tests}/**/*.js" "*.js"
+```
+
+`eslint.config.js` (flat config) and `.prettierrc.json` were adapted from the
+sibling `szkrabok` project on 2026-09-02 — its Playwright/chromium-specific
+boundary rules (no direct `chromium.launch*`, no stealth imports, the
+immutability restrictions on `.push()`/`.splice()`/`delete`) were dropped,
+since they encode `szkrabok`'s own architecture, not this project's. `sessions/`
+(gitignored Firefox-profile research artifacts, unrelated to jiraFedrunek's
+own code) and `sync/` (runtime output) are excluded from both tools. Run
+`npm run lint && npm test` before considering any change done, per the
+project's [Workflow Rules](../CLAUDE.md#workflow-rules).
 
 ## Open items
 

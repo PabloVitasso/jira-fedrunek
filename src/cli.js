@@ -2,7 +2,10 @@ const CONFLUENCE_VERBS = {
   page: (args, { confluenceSyncEngine }) => confluenceSyncEngine.syncPage(args[0]),
   dir: (args, { confluenceSyncEngine, watchDirs }) => {
     const folderId = args[0];
-    const entry = (watchDirs ?? []).find((d) => d.folderId === folderId) ?? { folderId, label: folderId };
+    const entry = (watchDirs ?? []).find(d => d.folderId === folderId) ?? {
+      folderId,
+      label: folderId,
+    };
     return confluenceSyncEngine.syncDir(entry.folderId, entry.label);
   },
   dirs: (args, { confluenceSyncEngine, watchDirs }) => confluenceSyncEngine.syncDirs(watchDirs),
@@ -15,7 +18,9 @@ export async function dispatch(command, args, deps) {
   const { mcpSession, syncEngine, trackedKeysConfig } = deps;
   switch (command) {
     case 'login': {
-      console.log('[dispatch] step 2: connecting McpSession (browser auth if no cached token) then closing');
+      console.log(
+        '[dispatch] step 2: connecting McpSession (browser auth if no cached token) then closing'
+      );
       await mcpSession.connect();
       await mcpSession.close();
       console.log('[dispatch] step 3: login complete, mcp-remote token cache warm');
@@ -24,7 +29,9 @@ export async function dispatch(command, args, deps) {
     case 'sync': {
       let keys = args;
       if (keys.length === 0) {
-        console.log('[dispatch] step 2: no issue keys given, loading tracked_keys from TrackedKeysConfig');
+        console.log(
+          '[dispatch] step 2: no issue keys given, loading tracked_keys from TrackedKeysConfig'
+        );
         keys = trackedKeysConfig.load();
       }
       console.log(`[dispatch] step 3: running SyncEngine.syncAll(${JSON.stringify(keys)})`);
@@ -40,14 +47,18 @@ export async function dispatch(command, args, deps) {
     }
     case 'confluence': {
       const [verb, ...verbArgs] = args;
-      console.log(`[dispatch] step 2: dispatching confluence sub-verb="${verb}" args=${JSON.stringify(verbArgs)}`);
+      console.log(
+        `[dispatch] step 2: dispatching confluence sub-verb="${verb}" args=${JSON.stringify(verbArgs)}`
+      );
       const handler = CONFLUENCE_VERBS[verb];
       if (!handler) {
         console.log(`[dispatch] step 3: unknown confluence verb "${verb}"`);
         throw new Error(`unknown confluence verb: ${verb}`);
       }
       const result = await handler(verbArgs, deps);
-      console.log(`[dispatch] step 4: confluence ${verb} complete, result=${JSON.stringify(result)}`);
+      console.log(
+        `[dispatch] step 4: confluence ${verb} complete, result=${JSON.stringify(result)}`
+      );
       return { status: 'confluence', verb, result };
     }
     default:

@@ -14,7 +14,11 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "test": "node --test tests/node/*.test.js",
-    "login": "node src/index.js login"
+    "login": "node src/index.js login",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"{src,tests}/**/*.js\" \"*.js\"",
+    "format:check": "prettier --check \"{src,tests}/**/*.js\" \"*.js\""
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
@@ -22,6 +26,13 @@
     "p-limit": "7.3.2",
     "p-retry": "8.0.1",
     "smol-toml": "1.8.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.2.1",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.5.0",
+    "prettier": "3.8.3"
   },
   "license": "MIT"
 }
