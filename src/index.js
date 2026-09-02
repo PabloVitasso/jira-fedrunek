@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import readline from 'node:readline';
-import { dispatch } from './cli.js';
+import { CommanderError } from 'commander';
+import { buildProgram, withJsonRedirect } from './router.js';
 import { McpSession } from './mcp/McpSession.js';
 import { JiraClient } from './jira/JiraClient.js';
 import { ConfluenceClient } from './confluence/ConfluenceClient.js';
@@ -157,37 +158,32 @@ export function buildDependencies({ cwd = process.cwd(), yes } = {}) {
 
 export async function main(cwd = process.cwd()) {
   const projectRoot = path.resolve(cwd);
-  loadEnvFile(path.join(projectRoot, '.env'));
-  const [, , command, ...args] = process.argv;
-  console.log(`[index.main] step 1: dispatching command="${command}" args=${JSON.stringify(args)}`);
-
-  if (!['login', 'sync', 'track', 'confluence'].includes(command)) {
-    console.error('usage: jiraFedrunek <login|sync|track|confluence> [args...]');
-    process.exitCode = 1;
-    return;
-  }
-
-  console.log(
-    '[index.main] step 2: building real McpSession/SyncEngine/ConfluenceSyncEngine dependencies'
-  );
-  const deps = buildDependencies({ cwd: projectRoot, yes: args.includes('--yes') });
-  // "login" connects/closes McpSession itself inside dispatch(); "track" never
-  // touches the network at all. Every other command needs a live session first.
-  const needsConnection = command !== 'track' && command !== 'login';
-  try {
-    if (needsConnection) {
-      await deps.mcpSession.connect();
+  // --json/--yes are pre-scanned from raw argv (not Commander-parsed) because
+  // buildDependencies() and loadEnvFile() run, and log, before Commander gets
+  // a chance to parse anything — their step-logs need the same stdout/stderr
+  // redirect as everything Commander-dispatched, regardless of flag position.
+  const json = process.argv.includes('--json');
+  const yes = process.argv.includes('--yes');
+  await withJsonRedirect(json, async () => {
+    loadEnvFile(path.join(projectRoot, '.env'));
+    console.log(
+      '[index.main] step 1: building real McpSession/SyncEngine/ConfluenceSyncEngine dependencies'
+    );
+    const deps = buildDependencies({ cwd: projectRoot, yes });
+    console.log('[index.main] step 2: building Commander program and parsing argv');
+    const program = buildProgram(deps);
+    try {
+      await program.parseAsync(process.argv);
+      console.log('[index.main] step 3: command complete');
+    } catch (err) {
+      if (err instanceof CommanderError) {
+        process.exitCode = err.exitCode;
+        return;
+      }
+      console.error(err.message);
+      process.exitCode = 1;
     }
-    const result = await dispatch(command, args, deps);
-    console.log(`[index.main] step 3: dispatch complete, result=${JSON.stringify(result)}`);
-  } catch (err) {
-    console.error(err.message);
-    process.exitCode = 1;
-  } finally {
-    if (needsConnection) {
-      await deps.mcpSession.close();
-    }
-  }
+  });
 }
 
 if (isMainModule(process.argv[1], import.meta.url)) {

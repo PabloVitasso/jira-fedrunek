@@ -118,9 +118,15 @@ src/
     TrackedKeysConfig.js          jiraFedrunek.toml's [jira].tracked_keys — load/add
     ProjectConfig.js              jiraFedrunek.toml's cloud_id + [confluence] targets — load
   log.js                       step(color, text) — ANSI-if-TTY, shared by mcp/confluence modules
-  cli.js                        dispatch(command, args, deps) — testable CLI logic, no process.* calls
+  cli.js                        one exported handler per verb (loginCommand, syncCommand,
+                                trackCommand, confluence*Command) — testable CLI logic,
+                                no process.*/commander calls
+  router.js                     buildProgram(deps) — commander.js Command tree, aliases,
+                                --json; run() is the one connect/execute/close lifecycle
+                                wrapper shared by every command
   index.js                      thin shell: parses argv/.env, constructs the real McpSession/
-                                clients/engines graph, calls cli.js dispatch(), owns process.exit
+                                clients/engines graph, calls router.js buildProgram().parseAsync(),
+                                owns process.exitCode
 
 jiraFedrunek.toml             cloud_id, [jira].tracked_keys, [confluence] targets — gitignored (real ids);
                                jiraFedrunek.toml.example is the committed template
@@ -179,20 +185,29 @@ would be more code for no behavioral benefit. Precedent: Terraform state (`resou
 list, each entry typed) and `package-lock.json` (per-package entries, not a single
 generic dependency schema).
 
-**`cli.js` vs `index.js` split (not in spec §7, added for testability):** `cli.js`
-exports a pure `dispatch(command, args, deps)` that takes already-built collaborators
+**`cli.js`/`router.js`/`index.js` split (not in spec §7, added for testability):**
+`cli.js` exports one pure handler function per verb (`(args, deps) => result`,
+e.g. `syncCommand`, `confluencePageCommand`) that takes already-built collaborators
 (`mcpSession`, `syncEngine`, `trackedKeysConfig`, `confluenceSyncEngine`, plus the
 `watchDirs`/`watchPages`/`spaceKeys` lists) and returns a result object or throws — no
-`process.argv`, `process.exit`, or `.env` parsing. `index.js` is the thin, untested-by-design
-shell: it loads `.env`, constructs the real `McpSession`/`JiraClient`/`ConfluenceClient`/
-`FolderWalker`/`SyncState`/`FileWriter`/`SyncEngine`/`ConfluenceSyncEngine`/
-`TrackedKeysConfig`/`ProjectConfig` graph, and calls `dispatch()`.
+`process.argv`, `process.exit`, `commander`, or `.env` parsing. `router.js` owns all
+routing: `buildProgram(deps)` builds one `commander.js` `Command` tree (verbs +
+aliases, see "CLI surface" below) wiring each `.action()` straight to its `cli.js`
+handler via `run()` — the one lifecycle wrapper (connect `McpSession`, call the
+handler, close `McpSession` in a `finally`) and `--json` output boundary shared by
+every command; see [docs/development.md#cli-routing-commanderjs](development.md#cli-routing-commanderjs).
+`index.js` is the thin, untested-by-design shell: it loads `.env`, constructs the
+real `McpSession`/`JiraClient`/`ConfluenceClient`/`FolderWalker`/`SyncState`/
+`FileWriter`/`SyncEngine`/`ConfluenceSyncEngine`/`TrackedKeysConfig`/`ProjectConfig`
+graph, and calls `router.js`'s `buildProgram(deps).parseAsync(process.argv)`.
 
-**CLI surface:** `login`, `sync [keys...]`, `track <keys...>` (Jira, unchanged), plus
-`confluence <page|dir|dirs|pages|sync> [args...]` — one dispatcher, Confluence nested
-under one noun (`gh <noun> <verb>` pattern) rather than a flat, growing set of top-level
-commands. `login` now connects `McpSession` (triggering the one-time browser consent if
-no cached token) and closes, instead of running a full OAuth 3LO exchange.
+**CLI surface:** `login`/`l`, `sync [keys...]`/`s`, `track [keys...]`/`t` (Jira,
+unchanged), plus `confluence`/`cf` nested under one noun (`gh <noun> <verb>`
+pattern) with its own `page <id>`/`p`, `dir <id>`/`d`, `dirs`/`ds`, `pages`/`ps`,
+`sync`/`s` — Commander scopes subcommand aliases to their parent, so `cf s` and the
+top-level `s` coexist without collision. `login` now connects `McpSession`
+(triggering the one-time browser consent if no cached token) and closes, instead of
+running a full OAuth 3LO exchange.
 
 **Architecture-audit fixes (2026-09-02):** see
 [20260902-architecture-audit-findings-done.md](features/20260902-architecture-audit-findings-done.md)
