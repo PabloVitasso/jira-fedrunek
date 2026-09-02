@@ -46,10 +46,7 @@ See spec section 5 for the exact Jira Markdown/frontmatter format.
 
 ## Auth storage
 
-No token file in this repo at all. `mcp-remote` (spawned via `npx` per invocation) owns
-its own on-disk token cache at `~/.mcp-auth/mcp-remote-v1/*_tokens.json` (`chmod 600`),
-shared across every jiraFedrunek command — Jira and Confluence both — after the first
-browser consent. See
-[docs/features/20260902-mcp-auth-integration-done.md](./docs/features/20260902-mcp-auth-integration-done.md)
-for the migration this replaced (jiraFedrunek's own OAuth 3LO app + file-based token
-store); the OS-keychain proposal that once targeted that store is superseded.
+No token file in this repo is stored.
+
+ `mcp-remote` (spawned via `npx` per invocation) owns its own on-disk token cache at `~/.mcp-auth/mcp-remote-v1/*_tokens.json` (`chmod 600`),
+shared across every jiraFedrunek command — Jira and Confluence both — after the first browser consent.
