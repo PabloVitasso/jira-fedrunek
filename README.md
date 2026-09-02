@@ -35,7 +35,7 @@ jiraFedrunek.toml        # cloud_id, [jira].tracked_keys, [confluence] targets â
                           # real project/space/page ids; copy from jiraFedrunek.toml.example (committed template)
 
 sync/
-  PROJ-123.md
+  PROJ/PROJ-123.md
   confluence/
     {spaceKey}/{id}-{slug}.md
     CONTENTS.md
