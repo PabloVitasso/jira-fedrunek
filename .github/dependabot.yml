@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 5
+    # This repo pins every dependency to an exact version on purpose
+    # (docs/development.md#dependency-pinning) - Dependabot PRs are how a
+    # pin bump gets proposed, reviewed, and tested, never an unattended
+    # `npm update`. Security PRs (GHSA-backed) are opened regardless of
+    # this schedule.
+    versioning-strategy: 'increase'
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'

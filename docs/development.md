@@ -12,6 +12,7 @@ metadata:
 
 - [Doc frontmatter convention](#doc-frontmatter-convention)
 - [Dependency pinning](#dependency-pinning)
+  - [Auditing and patching transitive vulnerabilities](#auditing-and-patching-transitive-vulnerabilities)
 - [Auth](#auth)
 - [Running locally](#running-locally)
 - [Adding a new module](#adding-a-new-module)
@@ -69,11 +70,77 @@ tarball, so the dependency tree is reproducible and auditable.
   (this happened once with `j2m@2.4.0`, which was never published; the real latest
   is `1.1.0`)
 
+### Auditing and patching transitive vulnerabilities
+
+`npm audit` (run in CI, see below) flags vulnerable *transitive* deps - packages
+pulled in by something we depend on directly, not something we chose. The fix is
+almost never "bump the direct dependency" (that could jump a major version we
+haven't reviewed, or simply not exist upstream yet) - it's `overrides` in
+`package.json`, pinned exactly the same way direct dependencies are.
+
+**Why:** this happened for real with `mcp-remote@0.8.3` - it bundles its own
+`express@4.22.1` -> `body-parser@1.20.4` -> `qs@6.14.2`, all three vulnerable
+(moderate/low DoS advisories), while `@modelcontextprotocol/sdk` already carries
+a patched `express@5.2.1` tree side by side in the same `node_modules`. Bumping
+`mcp-remote` itself wasn't an option (0.8.3 is latest); the vulnerability lives
+one level deeper, in packages `mcp-remote` doesn't control either.
+
+**How to apply**, in order, whenever `npm audit` (or Dependabot, see below)
+reports something:
+
+1. **Find exactly what's pulling in the vulnerable version** - don't guess or
+   run `npm audit fix --force` blind, it can silently rewrite a pinned direct
+   dependency to a version you never reviewed:
+   ```bash
+   npm ls <vulnerable-pkg>            # who resolves to the flagged version, and via what chain
+   npm explain <vulnerable-pkg>       # same thing, one dependency-path per resolved version
+   npm audit --json                  # machine-readable: .vulnerabilities[<pkg>].range = patched range
+   ```
+2. **Add a scoped override** - key it to the specific direct dependency that
+   drags the vulnerable package in (`"pkg@version"`), not a bare package name,
+   so the override can't silently apply somewhere else in the tree it was never
+   audited for:
+   ```json
+   "overrides": {
+     "mcp-remote@0.8.3": {
+       "body-parser": "1.20.6",
+       "qs": "6.16.0"
+     }
+   }
+   ```
+3. **Reinstall and confirm**:
+   ```bash
+   npm install
+   npm audit                          # must report 0 vulnerabilities
+   npm ls <vulnerable-pkg>            # confirm "overridden" / deduped to the patched version
+   ```
+4. **Re-run the real thing before trusting it** - an override changes what code
+   actually executes inside the overridden package; a clean `npm audit` alone
+   doesn't prove `mcp-remote` still works with a body-parser/qs it wasn't tested
+   against upstream. Run `npm test`, `npm run login`, and one real `sync <key>`.
+5. Commit `package.json` + `package-lock.json` together, same as any other
+   dependency change.
+
+This is the same reasoning as exact-pinning direct dependencies above, one
+level deeper: don't let a `^`/`~` range - or a vulnerability fix - resolve to
+an unreviewed tarball anywhere in the tree, direct or transitive.
+
+**CI enforcement:** `.github/workflows/audit.yml` runs `npm audit --audit-level=moderate`
+on every push/PR to `main` and weekly on a schedule, so a newly-disclosed
+advisory in an existing (already-pinned) tree gets caught even with no local
+`npm install` triggering it. It also re-checks that no `^`/`~`/`*`/`>=` range
+crept back into `package.json`. A red run means: follow the four steps above,
+don't just re-run the workflow. `.github/dependabot.yml` opens weekly npm and
+GitHub Actions update PRs (`versioning-strategy: increase`, so it proposes the
+next exact pin rather than widening a range) - review and test each one the
+same way (steps 3-4), don't auto-merge.
+
 ## Auth
 
 No app registration step. jiraFedrunek talks to Atlassian's hosted MCP server
-(`https://mcp.atlassian.com/v1/mcp`) via `npx mcp-remote`, which owns its own
-OAuth client — the first `McpSession.connect()` in any run opens a browser for
+(`https://mcp.atlassian.com/v1/mcp`) via `npx --no-install mcp-remote` (pinned
+exact version in `package.json`, see [Dependency pinning](#dependency-pinning)),
+which owns its own OAuth client — the first `McpSession.connect()` in any run opens a browser for
 a one-time consent (Jira + Confluence both covered by that single consent).
 `mcp-remote` caches the resulting token at
 `~/.mcp-auth/mcp-remote-v1/*_tokens.json` (`chmod 600`, outside this repo, not
@@ -189,6 +256,8 @@ Carried over from spec §10, minus what the MCP migration already resolved:
 - Attachment/image handling is out of scope for v2; Markdown fidelity for
   images/attachments/macros/mentions is unconfirmed — see
   [docs/atlassian-mcp-reference.md — Markdown fidelity](atlassian-mcp-reference.md#markdown-fidelity-confluence--markdown)
-- `mcp-remote` is invoked unpinned via `npx -y mcp-remote` — pinning it as a local
-  dependency was evaluated and left unresolved, see the proposal's "Open issues #6"
+- `mcp-remote` is pinned as a local dependency (`package.json`, exact version) and
+  invoked via `npx --no-install mcp-remote` so it resolves the locally installed,
+  lockfile-verified copy instead of an ad-hoc registry fetch — see the proposal's
+  "Open issues #6" for the prior unpinned state and rationale
 - Token behavior at/after `expires_at` in a headless context is unconfirmed

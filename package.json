@@ -29,6 +29,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
     "gray-matter": "4.0.3",
+    "mcp-remote": "0.8.3",
     "p-limit": "7.3.2",
     "p-retry": "8.0.1",
     "smol-toml": "1.8.0"
@@ -39,6 +40,12 @@
     "eslint-config-prettier": "10.1.8",
     "globals": "17.5.0",
     "prettier": "3.8.3"
+  },
+  "overrides": {
+    "mcp-remote@0.8.3": {
+      "body-parser": "1.20.6",
+      "qs": "6.16.0"
+    }
   },
   "license": "MIT"
 }
