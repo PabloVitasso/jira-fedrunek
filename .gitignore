@@ -1,0 +1,9 @@
+node_modules/
+sync/.sync-state.json
+.env
+*.log
+
+# Defense-in-depth only: oauth-tokens.json is written to ~/.config/jiraFedrunek/
+# (outside this repo) by default, never under sync/. This entry stays in case
+# TokenStore is ever pointed at a path inside the repo (e.g. local overrides/testing).
+sync/.oauth-tokens.json

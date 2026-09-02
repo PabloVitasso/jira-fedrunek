@@ -1,0 +1,26 @@
+{
+  "name": "jirafedrunek",
+  "version": "0.1.0",
+  "description": "Sync Jira issues + comments to local Markdown files, idempotently, with delta detection",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "jiraFedrunek": "src/index.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test tests/node/*.test.js",
+    "login": "node src/index.js login"
+  },
+  "dependencies": {
+    "gray-matter": "4.0.3",
+    "j2m": "1.1.0",
+    "open": "10.1.0",
+    "smol-toml": "1.8.0"
+  },
+  "license": "MIT"
+}
