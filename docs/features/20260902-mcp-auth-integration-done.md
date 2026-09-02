@@ -2,22 +2,26 @@
 name: mcp-auth-integration
 description: absorb confluence-fetch into jiraFedrunek — one MCP-authenticated tool that fetches both Jira issues and Confluence pages, replacing jiraFedrunek's own OAuth 3LO app and REST v2 fetch, no separate confluence-fetch tool afterward
 metadata:
-  type: proposal
-  status: decision pending
+  type: done
+  status: done
   spec_ref: docs/jiraFedrunek-spec-v2.md
   see_also: docs/atlassian-mcp-reference.md
 ---
 
-# Unified Jira + Confluence fetch via MCP (proposal)
+# Unified Jira + Confluence fetch via MCP (done)
 
-**Status: decision pending, not adopted by default.** Architecture is
-viable — no blocking gap in the MCP tool surface (see
-[docs/atlassian-mcp-reference.md](../atlassian-mcp-reference.md) for the
-verified facts: auth lifecycle, tool surfaces, response shapes). Adoption
-still needs the rest of "Open issues" below cleared (pagination, retry
-policy, state schema, markdown-fidelity-for-macros, etc.) before anyone
-commits to the migration. `src/auth/` and `src/jira/JiraClient.js` are
-unchanged for now (see [architecture.md](../architecture.md)).
+**Status: implemented.** `src/auth/` is deleted, `src/jira/JiraClient.js` is
+rewritten against MCP, and `src/confluence/` (`ConfluenceClient`,
+`FolderWalker`, `ConfluenceSyncEngine`) is a new port of `confluence-fetch`'s
+logic — see [architecture.md](../architecture.md) for the current module map.
+One deviation from this doc's original scope: the sibling `../confluence-fetch/`
+directory was **not** deleted (left as read-only reference material, per
+explicit direction during implementation) — its logic was copied and adapted
+into `src/confluence/`, not moved. The remaining "Open issues" below
+(pagination past one page, retry/concurrency policy specifics,
+markdown-fidelity-for-macros, `mcp-remote` pinning) were accepted as
+follow-up risk, not blockers, consistent with this doc's own resolution of
+issues #1/#2/#7 below.
 
 ## Why
 

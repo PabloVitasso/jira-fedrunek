@@ -20,70 +20,114 @@ metadata:
 ## Layer overview
 
 ```
-src/auth/       AtlassianOAuthClient, TokenStore, CallbackServer, AuthSession
-                — OAuth 2.0 (3LO) flow, token persistence, zero Jira-domain knowledge
-src/jira/       JiraClient — API access only, auth-agnostic via injected token getter
-src/markdown/   wikiToMarkdown, MarkdownFormatter, CommentBlockParser — pure, no I/O
-src/sync/       SyncState, FileWriter, SyncEngine, TrackedKeysConfig — orchestration + persistence
+src/mcp/        McpSession — owns the MCP Client/StdioClientTransport lifecycle
+                (npx mcp-remote, one subprocess per invocation), retry policy,
+                shutdown cleanup. Shared by JiraClient and ConfluenceClient —
+                this is the one auth/session boundary for the whole tool.
+src/jira/       JiraClient — Jira access via searchJiraIssuesUsingJql, auth-
+                agnostic via injected mcpSession.callTool
+src/confluence/ ConfluenceClient, FolderWalker, ConfluenceSyncEngine —
+                Confluence page/space/folder access + orchestration, ported
+                from the sibling confluence-fetch tool
+src/markdown/   MarkdownFormatter, CommentBlockParser — pure, no I/O
+src/sync/       SyncState, FileWriter, SyncEngine, TrackedKeysConfig,
+                ProjectConfig — orchestration + persistence
 ```
+
+Per [docs/features/20260902-mcp-auth-integration-done.md](features/20260902-mcp-auth-integration-done.md)
+(adopted): jiraFedrunek's own OAuth 3LO app + Jira REST v2 client were
+replaced by Atlassian's hosted MCP server (`https://mcp.atlassian.com/v1/mcp`),
+and the sibling `confluence-fetch` tool's logic was ported into
+`src/confluence/`. One MCP session per invocation, shared by both Jira and
+Confluence calls — no separate OAuth app registration step, no second tool.
 
 ## Data flow
 
+**Jira:**
 ```
-AuthSession.getAccessToken/getCloudId
+McpSession.connect() (browser auth on first run, cached token after)
         |
         v
-JiraClient.getIssue/getComments
-        |
-        v
-MarkdownConverter (wikiToMarkdown, per-field)
+JiraClient.getIssue  — searchJiraIssuesUsingJql, fields.comment.comments inline
         |
         v
 CommentBlockParser.mergeComments (diff against existing file)
         |
         v
-MarkdownFormatter.buildMarkdown (gray-matter stringify)
+MarkdownFormatter.buildFrontmatter/buildIssueBody/formatComment
         |
         v
-FileWriter.write + SyncState.set/save
+FileWriter.write + SyncState.setIssue/save
 ```
+
+**Confluence:**
+```
+McpSession.connect()
+        |
+        v
+ConfluenceClient.getPage/getSpaces/getPagesInSpace/searchByCql
+        |
+        v
+FolderWalker.walkDescendants (dir mode only — CQL ancestor pagination)
+        |
+        v
+MarkdownFormatter.buildPageFrontmatter/buildToc
+        |
+        v
+ConfluenceSyncEngine (diff vs SyncState's confluence section, confirmBulk
+        guard, orphan cleanup, CONTENTS.md rebuild)
+        |
+        v
+FileWriter.write + SyncState.setPage/save
+```
+
+Both products land in the same shape (Markdown text) through the same MCP
+transport — `description`/comment bodies (Jira) and `getConfluencePage`
+output (Confluence) are already Markdown, no wiki-markup conversion step.
 
 ## File layout
 
 ```
 src/
-  auth/
-    AtlassianOAuthClient.js   buildAuthorizeUrl, exchangeCodeForToken, refreshToken, getAccessibleResources
-    TokenStore.js             load/save/isExpired — ~/.config/jiraFedrunek/oauth-tokens.json, chmod 0600
-    CallbackServer.js         local HTTP listener, waitForCode(port)
-    AuthSession.js            orchestrates load/refresh/full-flow — DIP boundary for SyncEngine
+  mcp/
+    constants.js              MCP_URL, AUTH_TIMEOUT_S, CALL_TIMEOUT_MS, retry/concurrency knobs
+    McpSession.js              connect()/callTool(name,args)/close()
   jira/
-    JiraClient.js             getIssue(key), getComments(key) — baseUrl scoped by injected cloudId getter
+    JiraClient.js               getIssue(key) — DEFAULT_JIRA_FIELDS, 0/1/>1 semantics
+  confluence/
+    ConfluenceClient.js          getPage/getSpaces/getPagesInSpace/searchByCql — MCP calls only
+    FolderWalker.js               CQL-ancestor descendant pagination, pure orchestration
+    ConfluenceSyncEngine.js        page/dir/dirs/pages/sync modes, manifest diffing, confirmBulk,
+                                   CONTENTS.md rebuild
   markdown/
-    wikiToMarkdown.js         wraps j2m.toM (j2m@1.1.0's real export — spec's `to_markdown` name doesn't exist), stateless
-    MarkdownFormatter.js      buildFrontmatter, buildIssueBody, formatComment, buildMarkdown (gray-matter stringify)
-    CommentBlockParser.js     parseCommentBlocks, mergeComments — diffs existing file's HTML-comment blocks
+    MarkdownFormatter.js         buildFrontmatter, buildIssueBody, formatComment, buildMarkdown,
+                                 buildPageFrontmatter, buildToc — description/comment bodies are
+                                 already Markdown from MCP, no conversion step
+    CommentBlockParser.js        parseCommentBlocks, mergeComments — diffs existing file's HTML-comment blocks
   sync/
-    SyncState.js              load/get/set/save — sync/.sync-state.json
-    FileWriter.js             read/write — filesystem boundary, mockable
-    SyncEngine.js             syncIssue(key), syncAll(keys) — orchestrator, constructor-injected deps
-    TrackedKeysConfig.js      load/add — jiraFedrunek.toml (committed, not gitignored)
-  cli.js                      dispatch(command, args, { authSession, syncEngine, trackedKeysConfig }) — testable CLI logic, no process.* calls
-  index.js                    thin shell: parses argv/.env, constructs real AuthSession/SyncEngine/TrackedKeysConfig, calls cli.js dispatch(), owns process.exit
+    SyncState.js                 { issues: {...}, confluence: {...} } — getIssue/setIssue,
+                                 getPage/setPage/deletePage/allPages, one save()
+    FileWriter.js                filesystem boundary, mockable
+    SyncEngine.js                 syncIssue(key), syncAll(keys) — orchestrator
+    TrackedKeysConfig.js          jiraFedrunek.toml's tracked_keys — load/add
+    ProjectConfig.js              jiraFedrunek.toml's cloud_id + [confluence] targets — load
+  log.js                       step(color, text) — ANSI-if-TTY, shared by mcp/confluence modules
+  cli.js                        dispatch(command, args, deps) — testable CLI logic, no process.* calls
+  index.js                      thin shell: parses argv/.env, constructs the real McpSession/
+                                clients/engines graph, calls cli.js dispatch(), owns process.exit
 
-jiraFedrunek.toml             tracked_keys = [...] — committed, team-shared list of "sync with no args" issue keys
+jiraFedrunek.toml             cloud_id, tracked_keys, [confluence] targets — committed, team-shared
 
 sync/
   {ISSUE_KEY}.md              one file per issue, frontmatter + body (spec 5.1-5.3)
-  .sync-state.json            per-issue delta-detection state (spec 5.4)
-
-~/.config/jiraFedrunek/
-  oauth-tokens.json           access/refresh tokens + cloud_id (spec 5.5) — outside the repo
-                              on purpose, not gitignore-dependent; chmod 0600 on write
+  confluence/
+    {spaceKey}/{id}-{slug}.md    one file per Confluence page
+    {spaceKey}/{folderId}-{slug}/{id}-{slug}.md   pages fetched via a tracked folder
+    CONTENTS.md                  generated index, grouped by space then subfolder
+  .sync-state.json             { issues: {...}, confluence: {...} } — delta-detection state
 
 tests/
-  node/                       node:test specs, one file per Test Suite — see docs/testing.md for the full
-                              Test Suite / Test Case map (ISTQB-style test plan)
+  node/                       node:test specs, one file per Test Suite — see docs/testing.md
 ```
 
 **Deviation from spec §5.2/5.3:** the comment metadata block includes an extra
@@ -98,43 +142,48 @@ fileWriter)`, purely for test injection (fake clock, fake path) — defaults to
 `Date.now`-based ISO timestamps and `sync/{key}.md` when omitted, so production call
 sites are unaffected.
 
-**Deviation from spec §7.4:** `AuthSession`'s constructor takes an optional 4th
-`options` argument (`{ openUrl, port }`). The spec's full-flow step ("redirect user to
-authorize URL") never specified *how* the URL reaches the user; `openUrl` defaults to
-`console.log`-ing it and is overridden with the `open` npm package in `index.js` so
-`login` actually launches a browser. `port` defaults to `3000` and is overridden from
-`JIRA_REDIRECT_URI`'s port in `index.js`. Caught via a dedicated regression test
-(`TC-AUTH-SESSION-006`) after noticing `buildAuthorizeUrl`'s result was being discarded.
+**Superseded by the MCP migration:** `AtlassianOAuthClient`/`TokenStore`/
+`CallbackServer`/`AuthSession` (spec §7.2-§7.4's OAuth 3LO design) and
+`wikiToMarkdown`/`j2m` are gone entirely — `McpSession` replaces the auth
+stack, and MCP already returns Markdown text so there is nothing left to
+convert. The OS-keychain proposal
+([20260902-oauth-keyring-integration-proposal.md](features/20260902-oauth-keyring-integration-proposal.md))
+is superseded for the same reason: there is no local token file to protect,
+`mcp-remote` owns its own cache (`~/.mcp-auth/mcp-remote-v1/*_tokens.json`,
+`chmod 600`, outside this repo, not app-managed).
 
-**Deviation from spec §5.5/§7.2:** `TokenStore`'s default path (wired in `index.js`) is
-`~/.config/jiraFedrunek/oauth-tokens.json`, not `sync/.oauth-tokens.json` inside the repo
-as the spec's file layout shows. Relying on `.gitignore` alone to keep tokens out of git
-is fragile (a stray `git add -A`, a deleted gitignore line); a user-level config dir
-can't be committed to this repo at all. `TokenStore.save()` also `chmod`s the file to
-`0600` (owner read/write only) — see `docs/testing.md` `TC-AUTH-TOKENSTORE-006/007`.
-This is the file-based tier of the industry-standard options; see
-`docs/features/20260902-oauth-keyring-integration-proposal.md` for the OS-keychain tier
-(not yet implemented).
+**`TrackedKeysConfig`/`ProjectConfig` split and the `track` command (not in
+spec §7):** both parse the same `jiraFedrunek.toml` independently by design —
+`TrackedKeysConfig` owns `tracked_keys` (Jira, existing ad-hoc-vs-permanent
+distinction: `sync <keys>` is ad-hoc, `track <keys>` persists,
+bare `sync` loads `tracked_keys`), `ProjectConfig` owns `cloud_id` and
+`[confluence]` targets. Two focused parsers over one shared file, rather
+than a single generic config schema — same "no forced-generic schema"
+precedent as `SyncState`'s `{ issues, confluence }` split below.
 
-**`TrackedKeysConfig` and the `track` command (not in spec §7 — the ad-hoc-vs-permanent
-distinction between "sync one issue right now" vs. "keep syncing this issue every run"):**
-`jiraFedrunek sync PROJ-123` stays ad-hoc — it syncs exactly the keys given and doesn't
-persist them. `jiraFedrunek track PROJ-123` adds `PROJ-123` to `tracked_keys` in
-`jiraFedrunek.toml` (repo root, committed — team-shared, not a secret) via `add(keys)`.
-`jiraFedrunek sync` with *no* keys loads `tracked_keys` from that file and syncs all of
-them — that's "permanent" sync, triggered manually or from cron/a systemd timer (no
-daemon/scheduler is built into this project). Uses `smol-toml` (same library as
-szkrabok) for parse/stringify, pinned exact per `docs/development.md#dependency-pinning`.
+**`SyncState`'s `{ issues, confluence }` split:** one file, two independently-shaped
+sections — `issues` keeps the per-issue-key shape (`issue_updated_at` + `comment_ids`),
+`confluence` keeps a per-page-id shape (`lastModified`/`path`/`title`). Deliberately not
+one generic schema across both resource types: Jira's diffing needs per-comment-id
+tracking, Confluence's needs a flat `lastModified` — forcing both into one invented shape
+would be more code for no behavioral benefit. Precedent: Terraform state (`resources`
+list, each entry typed) and `package-lock.json` (per-package entries, not a single
+generic dependency schema).
 
 **`cli.js` vs `index.js` split (not in spec §7, added for testability):** `cli.js`
-exports a pure `dispatch(command, args, deps)` that takes an already-built
-`authSession`/`syncEngine` and returns a result object or throws — no `process.argv`,
-`process.exit`, or `.env` parsing. `index.js` is the thin, untested-by-design shell:
-it loads `.env`, constructs the real `AtlassianOAuthClient`/`TokenStore`/
-`CallbackServer`/`AuthSession`/`JiraClient`/`SyncState`/`FileWriter`/`SyncEngine`
-graph, and calls `dispatch()`. This mirrors why `SyncEngine`/`AuthSession` take
-constructor-injected deps in the first place — `cli.js` is the piece that's actually
-unit-testable; `index.js` is glue.
+exports a pure `dispatch(command, args, deps)` that takes already-built collaborators
+(`mcpSession`, `syncEngine`, `trackedKeysConfig`, `confluenceSyncEngine`, plus the
+`watchDirs`/`watchPages`/`spaceKeys` lists) and returns a result object or throws — no
+`process.argv`, `process.exit`, or `.env` parsing. `index.js` is the thin, untested-by-design
+shell: it loads `.env`, constructs the real `McpSession`/`JiraClient`/`ConfluenceClient`/
+`FolderWalker`/`SyncState`/`FileWriter`/`SyncEngine`/`ConfluenceSyncEngine`/
+`TrackedKeysConfig`/`ProjectConfig` graph, and calls `dispatch()`.
+
+**CLI surface:** `login`, `sync [keys...]`, `track <keys...>` (Jira, unchanged), plus
+`confluence <page|dir|dirs|pages|sync> [args...]` — one dispatcher, Confluence nested
+under one noun (`gh <noun> <verb>` pattern) rather than a flat, growing set of top-level
+commands. `login` now connects `McpSession` (triggering the one-time browser consent if
+no cached token) and closes, instead of running a full OAuth 3LO exchange.
 
 ## Module ownership
 
@@ -144,34 +193,49 @@ or another module's internals directly:
 
 | Module | Responsibility | Depends on |
 |---|---|---|
-| `AtlassianOAuthClient` | OAuth wire protocol only | nothing (pure HTTP calls) |
-| `TokenStore` | persist tokens across runs | filesystem (`~/.config/jiraFedrunek/oauth-tokens.json`, 0600) |
-| `CallbackServer` | local HTTP listener for the redirect | nothing |
-| `AuthSession` | get-or-refresh-or-login orchestration | `AtlassianOAuthClient`, `TokenStore`, `CallbackServer` |
-| `JiraClient` | Jira REST v2 access | injected `getAccessToken()` / `getCloudId()` (not `AuthSession` directly) |
-| `wikiToMarkdown` | wiki markup -> Markdown | `j2m` |
-| `MarkdownFormatter` | pure formatting, no I/O | `wikiToMarkdown` |
+| `McpSession` | MCP Client/transport lifecycle, retry, cleanup | `@modelcontextprotocol/sdk`, `p-retry` |
+| `JiraClient` | Jira access via `searchJiraIssuesUsingJql` | injected `{ callTool }` (an `McpSession`-shaped object), not `McpSession` directly |
+| `ConfluenceClient` | Confluence MCP calls only | injected `{ callTool }`, mirrors `JiraClient`'s shape |
+| `FolderWalker` | CQL-ancestor descendant pagination | `ConfluenceClient` |
+| `ConfluenceSyncEngine` | Confluence orchestrator (page/dir/dirs/pages/sync modes) | `ConfluenceClient`, `FolderWalker`, `SyncState`, `FileWriter` |
+| `MarkdownFormatter` | pure formatting, no I/O | nothing (description/comment/page bodies are already Markdown) |
 | `CommentBlockParser` | parse/merge existing file's comment blocks | `MarkdownFormatter.formatComment` (pure string ops otherwise) |
-| `SyncState` | `.sync-state.json` persistence | filesystem |
+| `SyncState` | `.sync-state.json` persistence, `{ issues, confluence }` | filesystem |
 | `FileWriter` | filesystem boundary | filesystem |
-| `SyncEngine` | orchestrator | `JiraClient`, `SyncState`, `FileWriter` (constructor injection) |
-| `TrackedKeysConfig` | `jiraFedrunek.toml` persistence (tracked issue keys) | filesystem, `smol-toml` |
-| `cli.js` (`dispatch`) | command routing, no process/env access | `AuthSession`, `SyncEngine`, `TrackedKeysConfig` (all passed in as `deps`) |
+| `SyncEngine` | Jira orchestrator | `JiraClient`, `SyncState`, `FileWriter` (constructor injection) |
+| `TrackedKeysConfig` | `jiraFedrunek.toml`'s `tracked_keys` | filesystem, `smol-toml` |
+| `ProjectConfig` | `jiraFedrunek.toml`'s `cloud_id` + `[confluence]` targets | filesystem, `smol-toml` |
+| `cli.js` (`dispatch`) | command routing, no process/env access | all of the above, passed in as `deps` |
 
 ## Non-negotiable invariants
 
-1. `JiraClient` never imports `AtlassianOAuthClient` or `TokenStore` directly — only the `getAccessToken`/`getCloudId` function pair passed at construction (DIP boundary from spec §7.5)
-2. `MarkdownFormatter` and `CommentBlockParser` do no I/O — no `fs`, no `fetch` — testable as pure functions
-3. `SyncEngine` never calls `fetch` or touches the filesystem directly — only through `JiraClient` and `FileWriter`
-4. Comment metadata lives in HTML comments in the body, never in YAML frontmatter — frontmatter is file-scoped only (spec §5.3)
-5. `sync/.sync-state.json` is gitignored — never committed. `~/.config/jiraFedrunek/oauth-tokens.json`
-   lives outside the repo entirely (not gitignore-dependent) and is written with mode `0600`
+1. `JiraClient`/`ConfluenceClient` never import `McpSession` directly — only the
+   `{ callTool }` shape passed at construction (DIP boundary)
+2. `MarkdownFormatter` and `CommentBlockParser` do no I/O — no `fs`, no network — testable
+   as pure functions
+3. `SyncEngine`/`ConfluenceSyncEngine` never call the MCP transport or touch the
+   filesystem directly — only through the injected client and `FileWriter`
+4. Comment metadata lives in HTML comments in the body, never in YAML frontmatter —
+   frontmatter is file-scoped only (spec §5.3)
+5. `sync/.sync-state.json` is gitignored — never committed. `mcp-remote`'s own token
+   cache (`~/.mcp-auth/mcp-remote-v1/*_tokens.json`) lives outside this repo entirely and
+   is not app-managed
 
 ## Sync algorithm
 
-See spec §6 for the full step-by-step; summary:
+**Jira** (spec §6, summary):
+1. `McpSession.connect()` — reuse cached token, or one-time browser consent
+2. `JiraClient.getIssue(key)`; compare `fields.updated` vs stored `issue_updated_at` —
+   skip body regen if unchanged
+3. Comments come back inline on `fields.comment.comments` — new `id` appended, changed
+   `updated` replaces the block, missing ids marked `<!-- deleted_at -->`
+4. Write file via `gray-matter` stringify, update `.sync-state.json`'s `issues` section
 
-1. `AuthSession.getAccessToken()` — load stored token, refresh if expired, else full OAuth flow
-2. Fetch issue, compare `fields.updated` vs stored `issue_updated_at` — skip body regen if unchanged
-3. Fetch comments — new `id` appended, changed `updated` replaces the block, missing ids marked `<!-- deleted_at -->`
-4. Write file via `gray-matter` stringify, update `.sync-state.json`
+**Confluence** (`page`/`dir`/`dirs`/`pages`/`sync` modes):
+1. Resolve target(s): a single page id, a folder's descendants (`FolderWalker`), the
+   configured watch lists, or every page in the configured spaces
+2. Diff against `.sync-state.json`'s `confluence` section by `lastModified`; for more
+   than one stale page, `confirmBulk` gates the download (TTY prompt, or `--yes`)
+3. Fetch stale pages concurrently (`p-limit`), write via `gray-matter` stringify with a
+   generated table of contents (`buildToc`)
+4. Remove orphaned manifest entries no longer present remotely, rebuild `CONTENTS.md`

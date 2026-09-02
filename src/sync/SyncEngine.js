@@ -12,16 +12,16 @@ export class SyncEngine {
   }
 
   async syncIssue(key) {
-    console.log(`[SyncEngine.syncIssue] step 1: fetching issue ${key} via JiraClient.getIssue`);
+    console.log(`[SyncEngine.syncIssue] step 1: fetching issue ${key} via JiraClient.getIssue (comments come back inline on fields.comment.comments)`);
     const issue = await this.jiraClient.getIssue(key);
-    const stored = this.syncState.get(key);
+    const stored = this.syncState.getIssue(key);
     console.log(`[SyncEngine.syncIssue] step 2: comparing fields.updated=${issue.fields.updated} vs stored issue_updated_at=${stored?.issue_updated_at}`);
     if (stored && stored.issue_updated_at === issue.fields.updated) {
       console.log('[SyncEngine.syncIssue] step 3: unchanged, skipping body regen');
       return { status: 'unchanged', key };
     }
-    console.log('[SyncEngine.syncIssue] step 4: fetching comments and merging against existing file blocks');
-    const comments = await this.jiraClient.getComments(key);
+    console.log('[SyncEngine.syncIssue] step 4: merging inline comments against existing file blocks');
+    const comments = issue.fields.comment?.comments ?? [];
     const filePath = this.pathForKey(key);
     const existingContent = this.fileWriter.read(filePath);
     const downloadedAt = this.now();
@@ -31,9 +31,9 @@ export class SyncEngine {
     const body = buildIssueBody(issue);
     const content = [body, '', '---', '', '## Comments', '', ...commentBlocks].join('\n');
     const markdown = matter.stringify(content, frontmatter);
-    console.log(`[SyncEngine.syncIssue] step 5: writing ${filePath} via FileWriter.write and updating SyncState.set/save`);
+    console.log(`[SyncEngine.syncIssue] step 5: writing ${filePath} via FileWriter.write and updating SyncState.setIssue/save`);
     this.fileWriter.write(filePath, markdown);
-    this.syncState.set(key, {
+    this.syncState.setIssue(key, {
       issue_updated_at: issue.fields.updated,
       comment_ids: comments.map((c) => String(c.id)),
     });

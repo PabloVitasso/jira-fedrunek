@@ -5,7 +5,7 @@ metadata:
   type: reference
   status: not-adopted
   architecture_ref: docs/architecture.md
-  source_investigation: docs/features/20260902-mcp-auth-integration-proposal.md
+  source_investigation: docs/features/20260902-mcp-auth-integration-done.md
   see_also_v2: docs/features/20260902-mcp-v2-migration-proposal.md
 ---
 
@@ -14,7 +14,7 @@ metadata:
 Findings from probing Atlassian's hosted remote MCP server
 (`https://mcp.atlassian.com/v1/mcp`, via `npx mcp-remote`) against the
 Acme Corp tenant (`cloudId aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`). Gathered
-while evaluating [20260902-mcp-auth-integration-proposal.md](features/20260902-mcp-auth-integration-proposal.md),
+while evaluating [20260902-mcp-auth-integration-done.md](features/20260902-mcp-auth-integration-done.md),
 whose migration is **not adopted** (see that doc's status) — this doc exists
 because the facts below outlast that decision and apply to any future
 Atlassian-MCP work, in this project or elsewhere. Not a design doc: no

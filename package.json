@@ -1,7 +1,7 @@
 {
   "name": "jirafedrunek",
   "version": "0.1.0",
-  "description": "Sync Jira issues + comments to local Markdown files, idempotently, with delta detection",
+  "description": "Sync Jira issues + comments and Confluence pages/spaces to local Markdown files, idempotently, via Atlassian's hosted MCP server",
   "type": "module",
   "main": "src/index.js",
   "bin": {
@@ -17,9 +17,10 @@
     "login": "node src/index.js login"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
     "gray-matter": "4.0.3",
-    "j2m": "1.1.0",
-    "open": "10.1.0",
+    "p-limit": "7.3.2",
+    "p-retry": "8.0.1",
     "smol-toml": "1.8.0"
   },
   "license": "MIT"

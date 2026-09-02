@@ -18,9 +18,9 @@ export class TrackedKeysConfig {
   }
 
   add(keys) {
-    console.log(`[TrackedKeysConfig.add] step 1: loading existing tracked_keys before adding ${JSON.stringify(keys)}`);
-    const existing = this.load();
-    const merged = [...existing];
+    console.log(`[TrackedKeysConfig.add] step 1: loading full existing TOML before adding ${JSON.stringify(keys)}`);
+    const data = fs.existsSync(this.path) ? parse(fs.readFileSync(this.path, 'utf8')) : {};
+    const merged = [...(data.tracked_keys ?? [])];
     for (const key of keys) {
       if (!merged.includes(key)) {
         console.log(`[TrackedKeysConfig.add] step 2: ${key} is new, appending`);
@@ -29,8 +29,8 @@ export class TrackedKeysConfig {
         console.log(`[TrackedKeysConfig.add] step 2: ${key} already tracked, skipping`);
       }
     }
-    console.log(`[TrackedKeysConfig.add] step 3: writing tracked_keys=${JSON.stringify(merged)} to ${this.path}`);
-    fs.writeFileSync(this.path, stringify({ tracked_keys: merged }), 'utf8');
+    console.log(`[TrackedKeysConfig.add] step 3: writing tracked_keys=${JSON.stringify(merged)} to ${this.path}, preserving other keys`);
+    fs.writeFileSync(this.path, stringify({ ...data, tracked_keys: merged }), 'utf8');
     return merged;
   }
 }

@@ -12,7 +12,7 @@ metadata:
 
 - [Doc frontmatter convention](#doc-frontmatter-convention)
 - [Dependency pinning](#dependency-pinning)
-- [Registering the OAuth app](#registering-the-oauth-app)
+- [Auth](#auth)
 - [Running locally](#running-locally)
 - [Adding a new module](#adding-a-new-module)
 - [Coding style](#coding-style)
@@ -68,21 +68,33 @@ tarball, so the dependency tree is reproducible and auditable.
   (this happened once with `j2m@2.4.0`, which was never published; the real latest
   is `1.1.0`)
 
-## Registering the OAuth app
+## Auth
 
-1. Go to `developer.atlassian.com/console/myapps` and create a new app
-2. Enable OAuth 2.0 (3LO)
-3. Add scope `read:jira-work` (add `offline_access` too, or `refresh_token` exchange won't work)
-4. Set callback URL to match `JIRA_REDIRECT_URI` in `.env` (default `http://localhost:8787/callback`)
-5. Copy `client_id` / `client_secret` into `.env` (see `.env.example`)
+No app registration step. jiraFedrunek talks to Atlassian's hosted MCP server
+(`https://mcp.atlassian.com/v1/mcp`) via `npx mcp-remote`, which owns its own
+OAuth client — the first `McpSession.connect()` in any run opens a browser for
+a one-time consent (Jira + Confluence both covered by that single consent).
+`mcp-remote` caches the resulting token at
+`~/.mcp-auth/mcp-remote-v1/*_tokens.json` (`chmod 600`, outside this repo, not
+app-managed) and reuses it silently on subsequent runs, including non-TTY/cron
+runs, within the token's lifetime (observed ~7.9h) — see
+[docs/atlassian-mcp-reference.md#auth](atlassian-mcp-reference.md#auth) and
+[docs/features/20260902-mcp-auth-integration-done.md](features/20260902-mcp-auth-integration-done.md)
+for the underlying investigation. Behavior past `expires_at` in a headless
+context is unconfirmed — see that proposal's "Open issues #1/#2".
+
+`mcp-remote`'s own child process prints an uncaught `DOMException [AbortError]`
+to stderr on every clean shutdown, after all real work is done — cosmetic,
+already swallowed on jiraFedrunek's side, see
+[docs/bugs/20260902-mcp-remote-close-domexception-bug.md](bugs/20260902-mcp-remote-close-domexception-bug.md).
 
 ## Running locally
 
 ```bash
 npm install
-cp .env.example .env      # fill in client id/secret
-npm run login              # opens browser, completes OAuth, writes ~/.config/jiraFedrunek/oauth-tokens.json
+node src/index.js login                    # one-time browser consent, warms mcp-remote's token cache
 node src/index.js sync PROJ-123 PROJ-124
+node src/index.js confluence page 100000001
 ```
 
 Re-running `sync` is idempotent — unchanged issues are skipped (spec §6 step 3), only
@@ -95,13 +107,14 @@ tracked — wire that bare `sync` into cron/a systemd timer for "permanent" sync
 
 ## Adding a new module
 
-1. Pick the layer it belongs to (`src/auth`, `src/jira`, `src/markdown`, `src/sync`) per
-   [docs/architecture.md — module ownership](./architecture.md#module-ownership)
+1. Pick the layer it belongs to (`src/mcp`, `src/jira`, `src/confluence`, `src/markdown`,
+   `src/sync`) per [docs/architecture.md — module ownership](./architecture.md#module-ownership)
 2. Keep it single-responsibility — if it needs both I/O and formatting logic, split it
-3. Wire it into `SyncEngine` (or `AuthSession`) via constructor injection, never via a
-   module-level singleton import
+3. Wire it into `SyncEngine`/`ConfluenceSyncEngine` via constructor injection, never via a
+   module-level singleton import. `JiraClient`/`ConfluenceClient` depend on a
+   `{ callTool }` shape, not the `McpSession` class directly
 4. Add a `tests/node/<name>.test.js` — pure modules (`markdown/*`) need no mocks;
-   I/O modules (`sync/*`, `auth/*`) take injected fakes
+   I/O modules (`sync/*`, `mcp/*`, `jira/*`, `confluence/*`) take injected fakes
 
 ## Coding style
 
@@ -111,16 +124,21 @@ tracked — wire that bare `sync` into cron/a systemd timer for "permanent" sync
   should always be present (e.g. `fields.updated` on an issue). Let it throw
 - **Constructor injection over imports.** Any module that talks to the network or
   filesystem takes its dependencies as constructor args (see spec §7) — this is what
-  makes `SyncEngine`/`AuthSession` testable without a live Jira instance
+  makes `SyncEngine`/`McpSession` testable without a live Jira/Confluence instance
 - **Every method logs its steps.** Each non-trivial method emits one `console.log`
   per logical step (`[ClassName.methodName] step N: ...`), not just entry/exit. This
   is how a sync run is debugged after the fact — there is no other logging layer
 
 ## Open items
 
-Carried over from spec §10:
+Carried over from spec §10, minus what the MCP migration already resolved:
 
-- Confirm Jira REST v2 `issue`/`comment` endpoints aren't slated for deprecation on the target instance
-- `j2m` table conversion — verify multi-column fidelity
-- Attachment/image handling is out of scope for v2; add an `AttachmentDownloader` module under `src/markdown/` or `src/jira/` if needed later
-- Decide token TTL handling: refresh-on-demand (current default, inside `AuthSession.getAccessToken`) vs refresh-on-startup
+- Confirm the Atlassian-hosted MCP server's Jira/Confluence tool surface isn't slated
+  for deprecation on the target tenant (`v1/mcp` vs `v2/mcp` — see
+  [docs/atlassian-mcp-reference.md](atlassian-mcp-reference.md#auth))
+- Attachment/image handling is out of scope for v2; Markdown fidelity for
+  images/attachments/macros/mentions is unconfirmed — see
+  [docs/atlassian-mcp-reference.md — Markdown fidelity](atlassian-mcp-reference.md#markdown-fidelity-confluence--markdown)
+- `mcp-remote` is invoked unpinned via `npx -y mcp-remote` — pinning it as a local
+  dependency was evaluated and left unresolved, see the proposal's "Open issues #6"
+- Token behavior at/after `expires_at` in a headless context is unconfirmed

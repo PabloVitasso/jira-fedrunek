@@ -5,7 +5,7 @@ metadata:
   type: proposal
   status: not adopted — reference material for a future migration, no action needed now
   spec_ref: docs/jiraFedrunek-spec-v2.md
-  depends_on: docs/features/20260902-mcp-auth-integration-proposal.md
+  depends_on: docs/features/20260902-mcp-auth-integration-done.md
   see_also: docs/atlassian-mcp-reference.md
 ---
 
@@ -15,7 +15,7 @@ metadata:
 migration doesn't start from zero if Atlassian ever sets a `v1` deprecation
 date. As of 2026-09-02, `v1/mcp` is confirmed still fully functional with no
 announced sunset — see "Why now" below. This doc assumes
-[20260902-mcp-auth-integration-proposal.md](20260902-mcp-auth-integration-proposal.md)
+[20260902-mcp-auth-integration-done.md](20260902-mcp-auth-integration-done.md)
 (jiraFedrunek absorbing `confluence-fetch/` over one shared MCP session) has
 been adopted first; everything here describes swapping that design's
 `v1/mcp` target for `v2/mcp` afterward, not a standalone change.
@@ -196,7 +196,7 @@ fetching full `inputSchema`s for every v2 top-level tool, 2026-09-02:
 
 ## What a v2 migration would actually touch in jiraFedrunek's design
 
-Assuming [20260902-mcp-auth-integration-proposal.md](20260902-mcp-auth-integration-proposal.md)
+Assuming [20260902-mcp-auth-integration-done.md](20260902-mcp-auth-integration-done.md)
 has already landed (so `McpSession`/`JiraClient`/`ConfluenceClient` exist,
 targeting v1):
 
@@ -267,7 +267,7 @@ targeting v1):
 ## Decision
 
 **Do not migrate now.** Build and ship
-[20260902-mcp-auth-integration-proposal.md](20260902-mcp-auth-integration-proposal.md)
+[20260902-mcp-auth-integration-done.md](20260902-mcp-auth-integration-done.md)
 against `v1/mcp` as already planned. Revisit this doc if:
 
 - Atlassian announces an actual `v1/mcp` deprecation date, or

@@ -1,32 +1,40 @@
+export const DEFAULT_JIRA_FIELDS = [
+  'summary', 'status', 'issuetype', 'priority', 'assignee', 'reporter',
+  'description', 'comment', 'labels', 'fixVersions', 'components',
+  'created', 'updated', 'resolutiondate',
+];
+
+function textOf(result) {
+  return (result?.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('\n');
+}
+
 export class JiraClient {
-  constructor({ getAccessToken, getCloudId }) {
-    this.getAccessToken = getAccessToken;
-    this.getCloudId = getCloudId;
+  constructor({ mcpSession, cloudId, fields = DEFAULT_JIRA_FIELDS }) {
+    this.mcpSession = mcpSession;
+    this.cloudId = cloudId;
+    this.fields = fields;
   }
 
-  async #request(path) {
-    console.log(`[JiraClient.#request] step 1: resolving cloudId + access token for ${path}`);
-    const [cloudId, accessToken] = await Promise.all([this.getCloudId(), this.getAccessToken()]);
-    const url = `https://api.atlassian.com/ex/jira/${cloudId}/rest/api/2${path}`;
-    console.log(`[JiraClient.#request] step 2: GET ${url}`);
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (!response.ok) {
-      console.log(`[JiraClient.#request] step 3: response not ok (${response.status} ${response.statusText})`);
-      throw new Error(`Jira API request failed: ${response.status} ${response.statusText}`);
+  async getIssue(key, { responseContentFormat = 'markdown' } = {}) {
+    console.log(`[JiraClient.getIssue] step 1: searchJiraIssuesUsingJql for key = ${key}`);
+    const result = await this.mcpSession.callTool('searchJiraIssuesUsingJql', {
+      cloudId: this.cloudId,
+      jql: `key = ${key}`,
+      fields: this.fields,
+      responseContentFormat,
+      maxResults: 1,
+    });
+    console.log('[JiraClient.getIssue] step 2: parsing { issues: [...] } envelope from response text');
+    const { issues } = JSON.parse(textOf(result));
+    if (issues.length === 0) {
+      console.log(`[JiraClient.getIssue] step 3: 0 issues matched key = ${key} — not found`);
+      throw new Error(`issue not found: ${key}`);
     }
-    console.log('[JiraClient.#request] step 3: returning parsed JSON');
-    return response.json();
-  }
-
-  async getIssue(key) {
-    console.log(`[JiraClient.getIssue] step 1: fetching issue ${key}`);
-    return this.#request(`/issue/${key}`);
-  }
-
-  async getComments(key) {
-    console.log(`[JiraClient.getComments] step 1: fetching comments for ${key}`);
-    const data = await this.#request(`/issue/${key}/comment`);
-    console.log('[JiraClient.getComments] step 2: unwrapping "comments" array from response envelope');
-    return data.comments;
+    if (issues.length > 1) {
+      console.log(`[JiraClient.getIssue] step 3: ${issues.length} issues matched key = ${key} — invariant violation`);
+      throw new Error(`key = ${key} matched more than one issue (${issues.length}) — this should never happen`);
+    }
+    console.log(`[JiraClient.getIssue] step 3: returning the single matched issue for ${key}`);
+    return issues[0];
   }
 }

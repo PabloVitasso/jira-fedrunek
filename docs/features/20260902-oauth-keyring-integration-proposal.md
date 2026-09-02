@@ -3,13 +3,22 @@ name: oauth-keyring-integration
 description: back TokenStore with the OS keychain (@napi-rs/keyring) instead of a plaintext file, falling back to the current file-based store when unavailable
 metadata:
   type: proposal
-  status: proposal
+  status: superseded
   spec_ref: docs/jiraFedrunek-spec-v2.md
+  see_also: docs/features/20260902-mcp-auth-integration-done.md
 ---
 
 # OS-keychain token storage (proposal)
 
-## Why
+**Superseded by [20260902-mcp-auth-integration-done.md](20260902-mcp-auth-integration-done.md).**
+`TokenStore` and the rest of `src/auth/` are deleted — jiraFedrunek no longer
+writes or owns any OAuth token file. Auth is a browser consent against
+Atlassian's hosted MCP server, and `mcp-remote` (an external process, not
+app code) owns its own token cache at `~/.mcp-auth/mcp-remote-v1/*_tokens.json`.
+There is nothing left for this proposal's OS-keychain backend to protect.
+Left here for historical context only; do not implement.
+
+## Why (historical)
 
 `TokenStore` currently writes tokens to `~/.config/jiraFedrunek/oauth-tokens.json`
 (mode `0600`, outside the repo — see `docs/architecture.md`'s spec §5.5/§7.2
