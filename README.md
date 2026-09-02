@@ -9,16 +9,44 @@ no OAuth app registration, no personal API token.
 
 ```bash
 npm install
-node src/index.js login                     # one-time browser consent, warms mcp-remote's token cache
-node src/index.js sync PROJ-123 PROJ-124     # ad-hoc: syncs just these keys, doesn't persist
-node src/index.js track PROJ-123             # permanent: adds PROJ-123 to jiraFedrunek.toml
-node src/index.js sync                       # syncs everything in jiraFedrunek.toml's [jira].tracked_keys
+jiraFedrunek login                     # one-time browser consent, warms mcp-remote's token cache
+jiraFedrunek sync PROJ-123 PROJ-124     # ad-hoc: syncs just these keys, doesn't persist
+jiraFedrunek track PROJ-123             # permanent: adds PROJ-123 to jiraFedrunek.toml
+jiraFedrunek sync                       # syncs everything in jiraFedrunek.toml's [jira].tracked_keys
 
-node src/index.js confluence page 100000001  # fetch one Confluence page by id
-node src/index.js confluence dir 100000002   # fetch one tracked folder's descendants
-node src/index.js confluence dirs            # fetch every folder in [confluence].watch_dirs
-node src/index.js confluence pages           # fetch every page in [confluence].watch_pages
-node src/index.js confluence sync            # fetch every page in [confluence].space_keys
+jiraFedrunek cf page 100000001          # fetch one Confluence page by id
+jiraFedrunek cf dir 100000002           # fetch one tracked folder's descendants
+jiraFedrunek cf dirs                    # fetch every folder in [confluence].watch_dirs
+jiraFedrunek cf pages                   # fetch every page in [confluence].watch_pages
+jiraFedrunek cf sync                    # fetch every page in [confluence].space_keys
+```
+
+Every command has a short alias (`l`, `t`, `s`, `cf`, and `cf`'s own `p`/`d`/`ds`/`ps`/`s`) —
+run `jiraFedrunek --help` for the full command tree. `npx --no-install` or
+`node src/index.js <command>` both still work if the package isn't installed as a
+global/local `bin`.
+
+### Scripting / `--json`
+
+Add `--json` (before or after the subcommand) for scripts, CI, or agent callers —
+it's a machine-readable output *protocol*, not a quiet mode. It gets you exactly
+one JSON document on `stdout`, with all step-log diagnostics moved to `stderr`
+instead of being interleaved:
+
+```bash
+result=$(jiraFedrunek sync --json 2>debug.log)
+jq empty <<< "$result"   # exactly one valid JSON document, no log lines mixed in
+```
+
+Every command's output is wrapped in the same envelope, `command` naming the verb
+that ran (`login`, `track`, `sync`, `confluence.page`, `confluence.dir`,
+`confluence.dirs`, `confluence.pages`, `confluence.sync`):
+
+```jsonc
+{"ok":true,"command":"sync","data":{"status":"synced","results":[...]}}
+
+// a failing command still emits one document, exit code 1, nothing thrown
+{"ok":false,"command":"sync","error":{"code":"COMMAND_FAILED","message":"..."}}
 ```
 
 ## Docs

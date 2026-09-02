@@ -15,6 +15,7 @@ metadata:
   - [Auditing and patching transitive vulnerabilities](#auditing-and-patching-transitive-vulnerabilities)
 - [Auth](#auth)
 - [Running locally](#running-locally)
+- [CLI routing (commander.js)](#cli-routing-commanderjs)
 - [Adding a new module](#adding-a-new-module)
 - [Coding style](#coding-style)
 - [Linting and formatting](#linting-and-formatting)
@@ -160,18 +161,78 @@ already swallowed on jiraFedrunek's side, see
 
 ```bash
 npm install
-node src/index.js login                    # one-time browser consent, warms mcp-remote's token cache
-node src/index.js sync PROJ-123 PROJ-124
-node src/index.js confluence page 100000001
+jiraFedrunek login                    # one-time browser consent, warms mcp-remote's token cache
+jiraFedrunek sync PROJ-123 PROJ-124
+jiraFedrunek cf page 100000001
 ```
 
 Re-running `sync` is idempotent — unchanged issues are skipped (spec §6 step 3), only
 new/changed comments are written.
 
 `sync PROJ-123` is ad-hoc (syncs just that key, nothing persisted). To keep an issue
-synced going forward: `node src/index.js track PROJ-123` (adds it to `[jira].tracked_keys` in
-`jiraFedrunek.toml`), then `node src/index.js sync` with no keys syncs everything
+synced going forward: `jiraFedrunek track PROJ-123` (adds it to `[jira].tracked_keys` in
+`jiraFedrunek.toml`), then `jiraFedrunek sync` with no keys syncs everything
 tracked — wire that bare `sync` into cron/a systemd timer for "permanent" sync.
+
+## CLI routing (`commander.js`)
+
+`src/router.js` builds the one `commander.js` `Command` tree that owns all routing —
+`src/cli.js`'s old `dispatch()`/`switch` is gone, replaced by one exported handler
+function per verb (`loginCommand`, `syncCommand`, `trackCommand`,
+`confluencePageCommand`, `confluenceDirCommand`, `confluenceDirsCommand`,
+`confluencePagesCommand`, `confluenceSyncCommand`), each wired directly to a
+Commander `.action()`. `router.js`'s `run()` is the one lifecycle wrapper shared by
+every command — connect `McpSession` (skipped for `track`, which never touches the
+network), call the handler, close `McpSession` in a `finally`, regardless of success
+or failure.
+
+Every command has a Commander-scoped alias (`login`/`l`, `track`/`t`, `sync`/`s`,
+`confluence`/`cf`, and `cf`'s own `page`/`p`, `dir`/`d`, `dirs`/`ds`, `pages`/`ps`,
+`sync`/`s`) — `cf s` and the top-level `s` don't collide, Commander scopes aliases to
+their parent command.
+
+**`--json`:** a global flag (`.option()` on the root `program`, works before or
+after the subcommand) that makes the CLI boundary emit exactly one JSON document to
+`stdout` instead of a human-readable result line — a machine-readable *protocol*,
+not a "quiet" mode; verbosity of the step-log trace is unaffected, it just moves to
+`stderr` (see below). No module below the CLI boundary becomes `--json`-aware —
+`router.js`'s `withJsonRedirect()` temporarily reassigns `console.log` to
+`console.error` for the duration of the command (restored in a `finally`), so every
+module's existing step-logs land on `stderr` unchanged instead of on `stdout`.
+`src/index.js`'s `main()` pre-scans raw `process.argv` for `--json` (the same way it
+already does for `--yes`) and wraps its own pre-Commander logging (`loadEnvFile`,
+`buildDependencies`) in the same redirect, since those steps log before Commander
+gets a chance to parse anything.
+
+**Result envelope:** every command's `cli.js` handler keeps returning its own
+domain-shaped result (`{ status: 'synced', results: [...] }`, `{ status: 'tracked',
+keys: [...] }`, etc.) unchanged — `router.js`'s `exec()` wraps that at the `--json`
+boundary only, into one of two uniform shapes:
+
+```jsonc
+// success
+{ "ok": true, "command": "sync", "data": { "status": "synced", "results": [...] } }
+
+// failure — the thrown Error's own .code if present, else "COMMAND_FAILED"
+{ "ok": false, "command": "sync", "error": { "code": "COMMAND_FAILED", "message": "..." } }
+```
+
+`command` is the dotted label registered alongside each `.action()` in
+`buildProgram()` (`login`, `track`, `sync`, `confluence.page`, `confluence.dir`,
+`confluence.dirs`, `confluence.pages`, `confluence.sync`) — stable regardless of
+which alias was used to invoke it. Under `--json`, a handler failure is still
+exactly one JSON document on `stdout` (`process.exitCode = 1`, no exception
+propagates) rather than a thrown rejection — human mode is unchanged: the error
+still propagates, gets printed to `stderr` as plain text by `main()`'s catch block,
+and exits `1`. In non-`--json` mode there is no envelope — `emit()` logs the raw
+handler result as-is, unwrapped.
+
+Exit codes: Commander is built with `.exitOverride()` so it throws a
+`CommanderError` instead of calling `process.exit()` directly (needed for in-process
+testing); `main()` catches it and sets `process.exitCode` from `err.exitCode` —
+non-zero for unknown commands/options, `0` for `--help`. A thrown error from inside
+a command handler is a plain `Error`, not a `CommanderError`; `main()` prints
+`err.message` to `stderr` and sets `process.exitCode = 1`.
 
 ## Adding a new module
 
