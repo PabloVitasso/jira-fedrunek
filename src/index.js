@@ -11,7 +11,7 @@ import { FolderWalker } from './confluence/FolderWalker.js';
 import { ConfluenceSyncEngine } from './confluence/ConfluenceSyncEngine.js';
 import { SyncState } from './sync/SyncState.js';
 import { FileWriter } from './sync/FileWriter.js';
-import { SyncEngine } from './sync/SyncEngine.js';
+import { SyncEngine, projectKeyOf } from './sync/SyncEngine.js';
 import { TrackedKeysConfig } from './sync/TrackedKeysConfig.js';
 import { ProjectConfig } from './sync/ProjectConfig.js';
 import { parse } from 'smol-toml';
@@ -120,7 +120,7 @@ export function buildDependencies({ cwd = process.cwd(), yes } = {}) {
   syncState.load();
   const fileWriter = new FileWriter();
   const syncEngine = new SyncEngine(jiraClient, syncState, fileWriter, {
-    pathForKey: key => path.join(projectRoot, 'sync', `${key}.md`),
+    pathForKey: key => path.join(projectRoot, 'sync', projectKeyOf(key), `${key}.md`),
   });
 
   console.log(

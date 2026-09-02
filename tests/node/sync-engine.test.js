@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SyncEngine } from '../../src/sync/SyncEngine.js';
+import { SyncEngine, projectKeyOf } from '../../src/sync/SyncEngine.js';
 
 const DOWNLOADED_AT = '2026-09-02T14:03:00Z';
 
@@ -181,4 +181,27 @@ test('TC-SYNC-ENGINE-005: syncIssue treats a missing fields.comment as zero comm
   );
   assert.deepEqual(result, { status: 'created', key: 'PROJ-1' });
   assert.deepEqual(syncState._state['PROJ-1'].comment_ids, []);
+});
+
+test('TC-SYNC-ENGINE-006: projectKeyOf splits on the last hyphen, distinguishing PROJ from PROJ2', () => {
+  console.log(
+    '[TC-SYNC-ENGINE-006] step 1: asserting PROJ-1 and PROJ2-1 resolve to distinct project keys'
+  );
+  assert.equal(projectKeyOf('PROJ-1'), 'PROJ');
+  assert.equal(projectKeyOf('PROJ2-1'), 'PROJ2');
+  assert.notEqual(projectKeyOf('PROJ-1'), projectKeyOf('PROJ2-1'));
+});
+
+test('TC-SYNC-ENGINE-007: default pathForKey nests PROJ-1 and PROJ2-1 under separate project folders', () => {
+  console.log('[TC-SYNC-ENGINE-007] step 1: constructing a SyncEngine with no pathForKey override');
+  const engine = new SyncEngine(
+    makeJiraClient({ issue: makeIssue() }),
+    makeSyncState(),
+    makeFileWriter()
+  );
+  console.log(
+    '[TC-SYNC-ENGINE-007] step 2: asserting PROJ-1 and PROJ2-1 do not collide into the same directory'
+  );
+  assert.equal(engine.pathForKey('PROJ-1'), 'sync/PROJ/PROJ-1.md');
+  assert.equal(engine.pathForKey('PROJ2-1'), 'sync/PROJ2/PROJ2-1.md');
 });

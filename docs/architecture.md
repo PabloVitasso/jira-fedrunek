@@ -146,8 +146,10 @@ undetectable. `formatComment` writes it; `parseCommentBlocks` reads it back.
 **Deviation from spec §7.11:** `SyncEngine`'s constructor takes an optional 4th
 `options` argument (`{ now, pathForKey }`) beyond the spec's `(jiraClient, syncState,
 fileWriter)`, purely for test injection (fake clock, fake path) — defaults to
-`Date.now`-based ISO timestamps and `sync/{key}.md` when omitted, so production call
-sites are unaffected.
+`Date.now`-based ISO timestamps and `sync/{PROJECT_KEY}/{key}.md` when omitted, so
+production call sites are unaffected. `PROJECT_KEY` is everything before the issue
+key's last hyphen (`projectKeyOf()`), keeping `PROJ-1` and `PROJ2-1` in separate
+directories rather than a flat `sync/` full of files from every tracked project.
 
 **Superseded by the MCP migration:** `AtlassianOAuthClient`/`TokenStore`/
 `CallbackServer`/`AuthSession` (spec §7.2-§7.4's OAuth 3LO design) and
