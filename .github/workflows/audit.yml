@@ -1,0 +1,50 @@
+name: Dependency audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: npm audit (moderate and above fails the build)
+        run: npm audit --audit-level=moderate
+
+      - name: Verify no semver ranges crept into package.json
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          # engines.node/peerDependencies are allowed to use ranges; dependencies/devDependencies must not.
+          if node -e "
+            const pkg = require('./package.json');
+            const bad = [];
+            for (const field of ['dependencies', 'devDependencies']) {
+              for (const [name, range] of Object.entries(pkg[field] || {})) {
+                if (/^[\^~*]|>=/.test(range)) bad.push(\`\${field}.\${name}=\${range}\`);
+              }
+            }
+            if (bad.length) { console.error('Unpinned range(s):', bad.join(', ')); process.exit(1); }
+          "; then
+            echo "OK: all dependencies/devDependencies are exact-pinned"
+          else
+            echo "See docs/development.md#dependency-pinning"
+            exit 1
+          fi

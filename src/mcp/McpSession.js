@@ -16,7 +16,12 @@ function defaultClientFactory() {
 }
 
 function defaultTransportFactory(mcpUrl) {
-  return new StdioClientTransport({ command: 'npx', args: ['-y', 'mcp-remote', mcpUrl] });
+  // --no-install: use the pinned local dependency (package.json/package-lock.json),
+  // never resolve an ad-hoc version off the registry at runtime.
+  return new StdioClientTransport({
+    command: 'npx',
+    args: ['--no-install', 'mcp-remote', mcpUrl],
+  });
 }
 
 // Owns the MCP Client/StdioClientTransport lifecycle (one npx mcp-remote
