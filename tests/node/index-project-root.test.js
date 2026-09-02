@@ -15,7 +15,7 @@ test('TC-INDEX-ROOT-001: buildDependencies(cwd) anchors all stateful paths under
   );
   assert.equal(deps.trackedKeysConfig.path, path.join(cwd, 'jiraFedrunek.toml'));
   assert.equal(deps.syncEngine.syncState.path, path.join(cwd, 'sync', '.sync-state.json'));
-  assert.equal(deps.syncEngine.pathForKey('PROJ-1'), path.join(cwd, 'sync', 'PROJ-1.md'));
+  assert.equal(deps.syncEngine.pathForKey('PROJ-1'), path.join(cwd, 'sync', 'PROJ', 'PROJ-1.md'));
   assert.equal(deps.confluenceSyncEngine.outDir, path.join(cwd, 'sync', 'confluence'));
 });
 

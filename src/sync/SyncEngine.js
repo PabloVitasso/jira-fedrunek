@@ -2,13 +2,19 @@ import matter from 'gray-matter';
 import { buildFrontmatter, buildIssueBody } from '../markdown/MarkdownFormatter.js';
 import { parseCommentBlocks, mergeComments } from '../markdown/CommentBlockParser.js';
 
+// Jira issue keys are PROJECT-NUMBER; the project key is everything before
+// the last hyphen (project keys themselves never contain a hyphen).
+export function projectKeyOf(key) {
+  return key.slice(0, key.lastIndexOf('-'));
+}
+
 export class SyncEngine {
   constructor(jiraClient, syncState, fileWriter, options = {}) {
     this.jiraClient = jiraClient;
     this.syncState = syncState;
     this.fileWriter = fileWriter;
     this.now = options.now ?? (() => new Date().toISOString());
-    this.pathForKey = options.pathForKey ?? ((key) => `sync/${key}.md`);
+    this.pathForKey = options.pathForKey ?? ((key) => `sync/${projectKeyOf(key)}/${key}.md`);
   }
 
   async syncIssue(key) {
