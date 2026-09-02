@@ -7,6 +7,12 @@
   "bin": {
     "jiraFedrunek": "src/index.js"
   },
+  "files": [
+    "src",
+    "package.json",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=20.0.0"
   },

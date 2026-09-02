@@ -16,7 +16,20 @@ import { TrackedKeysConfig } from './sync/TrackedKeysConfig.js';
 import { ProjectConfig } from './sync/ProjectConfig.js';
 import { parse } from 'smol-toml';
 
-const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// npm's node_modules/.bin shim is a symlink; import.meta.url resolves to the
+// symlink's realpath while process.argv[1] stays the symlink path, so a bare
+// string compare falsely reports "not the main module" when run via a
+// bin shim (as happens for every real jiraFedrunek install).
+export function isMainModule(argv1, moduleUrl) {
+  if (!argv1) return false;
+  let resolvedArgv1;
+  try {
+    resolvedArgv1 = fs.realpathSync(argv1);
+  } catch {
+    return false;
+  }
+  return fileURLToPath(moduleUrl) === resolvedArgv1;
+}
 
 function loadEnvFile(envPath) {
   console.log(`[index.loadEnvFile] step 1: reading ${envPath}, skipping if missing`);
@@ -86,7 +99,8 @@ function loadTomlOnce(tomlPath) {
   return fs.existsSync(tomlPath) ? parse(fs.readFileSync(tomlPath, 'utf8')) : undefined;
 }
 
-function buildDependencies({ yes } = {}) {
+export function buildDependencies({ cwd = process.cwd(), yes } = {}) {
+  const projectRoot = path.resolve(cwd);
   console.log(
     '[index.buildDependencies] step 1: loading jiraFedrunek.toml (cloud_id, confluence targets, tracked_keys) once, shared by ProjectConfig and TrackedKeysConfig'
   );
@@ -141,7 +155,8 @@ function buildDependencies({ yes } = {}) {
   };
 }
 
-async function main() {
+export async function main(cwd = process.cwd()) {
+  const projectRoot = path.resolve(cwd);
   loadEnvFile(path.join(projectRoot, '.env'));
   const [, , command, ...args] = process.argv;
   console.log(`[index.main] step 1: dispatching command="${command}" args=${JSON.stringify(args)}`);
@@ -155,7 +170,7 @@ async function main() {
   console.log(
     '[index.main] step 2: building real McpSession/SyncEngine/ConfluenceSyncEngine dependencies'
   );
-  const deps = buildDependencies({ yes: args.includes('--yes') });
+  const deps = buildDependencies({ cwd: projectRoot, yes: args.includes('--yes') });
   // "login" connects/closes McpSession itself inside dispatch(); "track" never
   // touches the network at all. Every other command needs a live session first.
   const needsConnection = command !== 'track' && command !== 'login';
@@ -175,4 +190,6 @@ async function main() {
   }
 }
 
-main();
+if (isMainModule(process.argv[1], import.meta.url)) {
+  main();
+}
