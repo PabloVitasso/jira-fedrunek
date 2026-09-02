@@ -20,7 +20,7 @@ test('TC-SYNC-TRACKEDKEYS-001: load() returns an empty array when no config file
 test('TC-SYNC-TRACKEDKEYS-002: load() parses tracked_keys from an existing TOML file', () => {
   console.log('[TC-SYNC-TRACKEDKEYS-002] step 1: writing a TOML file with tracked_keys directly');
   const configPath = makeTempPath();
-  fs.writeFileSync(configPath, 'tracked_keys = ["PROJ-1", "PROJ-2"]\n', 'utf8');
+  fs.writeFileSync(configPath, '[jira]\ntracked_keys = ["PROJ-1", "PROJ-2"]\n', 'utf8');
   console.log('[TC-SYNC-TRACKEDKEYS-002] step 2: loading it via TrackedKeysConfig and asserting the parsed array');
   const config = new TrackedKeysConfig(configPath);
   assert.deepEqual(config.load(), ['PROJ-1', 'PROJ-2']);
@@ -53,7 +53,7 @@ test('TC-SYNC-TRACKEDKEYS-006: add() preserves unrelated top-level keys already 
   const configPath = makeTempPath();
   fs.writeFileSync(
     configPath,
-    'cloud_id = "abc-123"\ntracked_keys = ["PROJ-1"]\n\n[confluence]\nspace_keys = ["ARCH"]\n',
+    'cloud_id = "abc-123"\n\n[jira]\ntracked_keys = ["PROJ-1"]\n\n[confluence]\nspace_keys = ["ARCH"]\n',
     'utf8'
   );
   const config = new TrackedKeysConfig(configPath);

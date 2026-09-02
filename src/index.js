@@ -93,7 +93,7 @@ function buildDependencies({ yes } = {}) {
     confirmBulk: makeConfirmBulk(yes),
   });
 
-  console.log('[index.buildDependencies] step 5: constructing TrackedKeysConfig (committed jiraFedrunek.toml at repo root)');
+  console.log('[index.buildDependencies] step 5: constructing TrackedKeysConfig (gitignored jiraFedrunek.toml at repo root)');
   const trackedKeysConfig = new TrackedKeysConfig(path.join(projectRoot, 'jiraFedrunek.toml'));
 
   return {

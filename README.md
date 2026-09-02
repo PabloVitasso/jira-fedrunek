@@ -12,7 +12,7 @@ npm install
 node src/index.js login                     # one-time browser consent, warms mcp-remote's token cache
 node src/index.js sync PROJ-123 PROJ-124     # ad-hoc: syncs just these keys, doesn't persist
 node src/index.js track PROJ-123             # permanent: adds PROJ-123 to jiraFedrunek.toml
-node src/index.js sync                       # syncs everything in jiraFedrunek.toml's tracked_keys
+node src/index.js sync                       # syncs everything in jiraFedrunek.toml's [jira].tracked_keys
 
 node src/index.js confluence page 100000001  # fetch one Confluence page by id
 node src/index.js confluence dir 100000002   # fetch one tracked folder's descendants
@@ -31,7 +31,8 @@ node src/index.js confluence sync            # fetch every page in [confluence].
 ## Output
 
 ```
-jiraFedrunek.toml        # cloud_id, tracked_keys, [confluence] targets — commit this, it's team-shared
+jiraFedrunek.toml        # cloud_id, [jira].tracked_keys, [confluence] targets — gitignored, can contain
+                          # real project/space/page ids; copy from jiraFedrunek.toml.example (committed template)
 
 sync/
   PROJ-123.md

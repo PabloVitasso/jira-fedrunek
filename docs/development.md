@@ -101,7 +101,7 @@ Re-running `sync` is idempotent — unchanged issues are skipped (spec §6 step 
 new/changed comments are written.
 
 `sync PROJ-123` is ad-hoc (syncs just that key, nothing persisted). To keep an issue
-synced going forward: `node src/index.js track PROJ-123` (adds it to `tracked_keys` in
+synced going forward: `node src/index.js track PROJ-123` (adds it to `[jira].tracked_keys` in
 `jiraFedrunek.toml`), then `node src/index.js sync` with no keys syncs everything
 tracked — wire that bare `sync` into cron/a systemd timer for "permanent" sync.
 

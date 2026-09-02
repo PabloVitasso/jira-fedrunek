@@ -109,14 +109,15 @@ src/
                                  getPage/setPage/deletePage/allPages, one save()
     FileWriter.js                filesystem boundary, mockable
     SyncEngine.js                 syncIssue(key), syncAll(keys) — orchestrator
-    TrackedKeysConfig.js          jiraFedrunek.toml's tracked_keys — load/add
+    TrackedKeysConfig.js          jiraFedrunek.toml's [jira].tracked_keys — load/add
     ProjectConfig.js              jiraFedrunek.toml's cloud_id + [confluence] targets — load
   log.js                       step(color, text) — ANSI-if-TTY, shared by mcp/confluence modules
   cli.js                        dispatch(command, args, deps) — testable CLI logic, no process.* calls
   index.js                      thin shell: parses argv/.env, constructs the real McpSession/
                                 clients/engines graph, calls cli.js dispatch(), owns process.exit
 
-jiraFedrunek.toml             cloud_id, tracked_keys, [confluence] targets — committed, team-shared
+jiraFedrunek.toml             cloud_id, [jira].tracked_keys, [confluence] targets — gitignored (real ids);
+                               jiraFedrunek.toml.example is the committed template
 
 sync/
   {ISSUE_KEY}.md              one file per issue, frontmatter + body (spec 5.1-5.3)
@@ -154,9 +155,9 @@ is superseded for the same reason: there is no local token file to protect,
 
 **`TrackedKeysConfig`/`ProjectConfig` split and the `track` command (not in
 spec §7):** both parse the same `jiraFedrunek.toml` independently by design —
-`TrackedKeysConfig` owns `tracked_keys` (Jira, existing ad-hoc-vs-permanent
+`TrackedKeysConfig` owns `[jira].tracked_keys` (existing ad-hoc-vs-permanent
 distinction: `sync <keys>` is ad-hoc, `track <keys>` persists,
-bare `sync` loads `tracked_keys`), `ProjectConfig` owns `cloud_id` and
+bare `sync` loads `[jira].tracked_keys`), `ProjectConfig` owns `cloud_id` and
 `[confluence]` targets. Two focused parsers over one shared file, rather
 than a single generic config schema — same "no forced-generic schema"
 precedent as `SyncState`'s `{ issues, confluence }` split below.
@@ -203,7 +204,7 @@ or another module's internals directly:
 | `SyncState` | `.sync-state.json` persistence, `{ issues, confluence }` | filesystem |
 | `FileWriter` | filesystem boundary | filesystem |
 | `SyncEngine` | Jira orchestrator | `JiraClient`, `SyncState`, `FileWriter` (constructor injection) |
-| `TrackedKeysConfig` | `jiraFedrunek.toml`'s `tracked_keys` | filesystem, `smol-toml` |
+| `TrackedKeysConfig` | `jiraFedrunek.toml`'s `[jira].tracked_keys` | filesystem, `smol-toml` |
 | `ProjectConfig` | `jiraFedrunek.toml`'s `cloud_id` + `[confluence]` targets | filesystem, `smol-toml` |
 | `cli.js` (`dispatch`) | command routing, no process/env access | all of the above, passed in as `deps` |
 

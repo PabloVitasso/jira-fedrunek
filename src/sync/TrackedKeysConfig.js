@@ -14,13 +14,14 @@ export class TrackedKeysConfig {
     }
     console.log('[TrackedKeysConfig.load] step 2: parsing TOML via smol-toml');
     const data = parse(fs.readFileSync(this.path, 'utf8'));
-    return data.tracked_keys ?? [];
+    return data.jira?.tracked_keys ?? [];
   }
 
   add(keys) {
     console.log(`[TrackedKeysConfig.add] step 1: loading full existing TOML before adding ${JSON.stringify(keys)}`);
     const data = fs.existsSync(this.path) ? parse(fs.readFileSync(this.path, 'utf8')) : {};
-    const merged = [...(data.tracked_keys ?? [])];
+    const jira = data.jira ?? {};
+    const merged = [...(jira.tracked_keys ?? [])];
     for (const key of keys) {
       if (!merged.includes(key)) {
         console.log(`[TrackedKeysConfig.add] step 2: ${key} is new, appending`);
@@ -29,8 +30,8 @@ export class TrackedKeysConfig {
         console.log(`[TrackedKeysConfig.add] step 2: ${key} already tracked, skipping`);
       }
     }
-    console.log(`[TrackedKeysConfig.add] step 3: writing tracked_keys=${JSON.stringify(merged)} to ${this.path}, preserving other keys`);
-    fs.writeFileSync(this.path, stringify({ ...data, tracked_keys: merged }), 'utf8');
+    console.log(`[TrackedKeysConfig.add] step 3: writing jira.tracked_keys=${JSON.stringify(merged)} to ${this.path}, preserving other keys`);
+    fs.writeFileSync(this.path, stringify({ ...data, jira: { ...jira, tracked_keys: merged } }), 'utf8');
     return merged;
   }
 }

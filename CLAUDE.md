@@ -32,4 +32,4 @@ npm test              # node:test over tests/node/*.test.js
 
 ## Ad-hoc vs. permanent sync
 
-`sync <keys...>` is ad-hoc — syncs exactly the given keys, nothing persisted. `track <keys...>` adds keys to `tracked_keys` in `jiraFedrunek.toml` (repo root, committed — not a secret, safe to share). `sync` with **no** keys loads `tracked_keys` and syncs all of them — that's "permanent," triggered manually or via cron/systemd timer (no daemon built in).
+`sync <keys...>` is ad-hoc — syncs exactly the given keys, nothing persisted. `track <keys...>` adds keys to `[jira].tracked_keys` in `jiraFedrunek.toml` (repo root, gitignored — it holds real project/space/page ids, so treat it as local-only; `jiraFedrunek.toml.example` is the committed template). `sync` with **no** keys loads `[jira].tracked_keys` and syncs all of them — that's "permanent," triggered manually or via cron/systemd timer (no daemon built in).

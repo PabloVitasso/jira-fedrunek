@@ -1,0 +1,15 @@
+cloud_id = "00000000-0000-0000-0000-000000000000"
+
+[jira]
+tracked_keys = ["PROJ-123", "PROJ-124"]
+
+[confluence]
+space_keys = ["SPACEKEY"]
+
+[[confluence.watch_pages]]
+id = "100000001"
+label = "Example watched page"
+
+[[confluence.watch_dirs]]
+folder_id = "100000002"
+label = "Example watched folder"
