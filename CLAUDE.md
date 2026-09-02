@@ -26,10 +26,17 @@
 npm test              # node:test over tests/node/*.test.js
 ```
 
-## Auth
+## Index of operations
 
-`sync/.sync-state.json` is runtime state, gitignored. Auth is a one-time browser consent against Atlassian's hosted MCP server (`https://mcp.atlassian.com/v1/mcp`), brokered by `npx mcp-remote` — no OAuth app registration, no client id/secret. `mcp-remote` owns its own token cache at `~/.mcp-auth/mcp-remote-v1/*_tokens.json` (`chmod 600`, outside the repo, not app-managed) and reuses it silently across runs. `npm run login` (`McpSession.connect()` + `close()`) just warms that cache. See `docs/features/20260902-mcp-auth-integration-done.md` and `docs/atlassian-mcp-reference.md#auth` for the details. The OS-keychain proposal at `docs/features/20260902-oauth-keyring-integration-proposal.md` is superseded — there's no local token file left for it to protect. A newer proposal, `docs/features/20260902-mcpc-oauth-keyring-hardening-proposal.md`, targets the token file `mcp-remote` itself still owns by swapping it for `@apify/mcpc` (real OS-keychain storage, verified against its current README) — decision pending, not adopted.
+Durable how/why content lives in `docs/` and `README.md`, not here — this file
+points to it so it can't drift out of sync with a second copy.
 
-## Ad-hoc vs. permanent sync
-
-`sync <keys...>` is ad-hoc — syncs exactly the given keys, nothing persisted. `track <keys...>` adds keys to `[jira].tracked_keys` in `jiraFedrunek.toml` (repo root, gitignored — it holds real project/space/page ids, so treat it as local-only; `jiraFedrunek.toml.example` is the committed template). `sync` with **no** keys loads `[jira].tracked_keys` and syncs all of them — that's "permanent," triggered manually or via cron/systemd timer (no daemon built in).
+| Topic | Where |
+|---|---|
+| Auth flow, token cache, `mcp-remote` invocation | [docs/development.md#auth](./docs/development.md#auth), [docs/atlassian-mcp-reference.md#auth](./docs/atlassian-mcp-reference.md#auth), [README.md#auth-storage](./README.md#auth-storage) |
+| `sync`/`track` ad-hoc vs. permanent semantics | [README.md#quick-start](./README.md#quick-start), [docs/architecture.md](./docs/architecture.md) — `TrackedKeysConfig`/`ProjectConfig` split |
+| Dependency pinning, auditing transitive vulnerabilities | [docs/development.md#dependency-pinning](./docs/development.md#dependency-pinning) |
+| Coding style, logging convention | [docs/development.md#coding-style](./docs/development.md#coding-style) |
+| Known bugs, workarounds | [docs/bugs/](./docs/bugs/) |
+| Module map, data flow, invariants | [docs/architecture.md](./docs/architecture.md) |
+| Test plan, status per module | [docs/testing.md](./docs/testing.md) |

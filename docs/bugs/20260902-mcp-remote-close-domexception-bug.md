@@ -3,7 +3,7 @@ name: mcp-remote-close-domexception
 description: mcp-remote throws an uncaught DOMException [AbortError] from its StreamableHTTPClientTransport.close() on every clean shutdown, after the MCP client's own work has completed
 metadata:
   type: bug
-  status: known — swallowed by design, not fixed upstream
+  status: mitigated — swallowed by design; confirmed not a version regression, not yet filed upstream
   spec_ref: docs/jiraFedrunek-spec-v2.md
   see_also: docs/atlassian-mcp-reference.md, docs/development.md#auth
 ---
@@ -40,8 +40,10 @@ errors of any kind upstream of it.
 - `mcp-remote`'s token cache already warm (`~/.mcp-auth/mcp-remote-v1/*_tokens.json`)
   — reproduces on both a fresh browser-consent connect and a cached-token
   connect, so auth state is not a factor
-- Any jiraFedrunek command that opens an `McpSession` (`sync`, `confluence *`,
-  `login`)
+- **At least one `callTool()` must happen between `connect()` and `close()`.**
+  `npm run login` (bare `connect()` + immediate `close()`, no tool call) does
+  **not** reproduce — 4/4 clean runs. `sync <key>` (connect → callTool →
+  close) reproduces 3/3. See "Verification" below.
 
 ## Steps to reproduce
 
@@ -105,6 +107,26 @@ This swallows the promise rejection on jiraFedrunek's side of the pipe; the
 catch — there is no hook to suppress the child process's own logging
 without patching `mcp-remote` itself.
 
+## Verification (2026-09-02)
+
+A version-regression hypothesis was raised — `0.8.3` was published ~2 days
+before this bug was first observed, so it was worth checking whether an
+older `mcp-remote` avoids the error. Tested by temporarily pinning
+`McpSession.js`'s `defaultTransportFactory` npx arg to `mcp-remote@0.8.2`,
+running `sync <tracked-key>` three times, then reverting the pin (no net diff).
+
+| Command | `mcp-remote` | Runs | AbortError |
+|---|---|---|---|
+| `npm run login` (connect → close, no tool call) | 0.8.3 (unpinned) | 4 | 0/4 |
+| `sync <tracked-key>` (connect → callTool → close) | 0.8.3 (unpinned) | 3 | 3/3 |
+| `sync <tracked-key>` (connect → callTool → close) | 0.8.2 (pinned) | 3 | 3/3 |
+
+**Conclusion:** not a `0.8.3` regression — `0.8.2` reproduces identically.
+The real trigger condition is whether a tool call happened before shutdown,
+not the package version. This is consistent with the AbortController/socket
+teardown theory in "Root cause" below: `close()` only has something to abort
+when a request has actually gone out over the transport.
+
 ## Impact on correctness
 
 None observed. Every field/file-write assertion in `npm test` and in the
@@ -115,7 +137,11 @@ passed with this exception present; it fires strictly after
 ## Status
 
 Not filed upstream against `mcp-remote` (no confirmed maintainer bug tracker
-checked as of this writing). Left as a known, swallowed, cosmetic issue.
-Revisit if `mcp-remote` is ever pinned as a direct dependency (see
+checked as of this writing). Confirmed via the "Verification" section above
+that this is **not** a `0.8.3`-specific regression — `0.8.2` reproduces
+identically, so pinning to an older version is not a viable workaround.
+Left as a known, swallowed, cosmetic issue, gated on whether a tool call
+happened before shutdown rather than on package version. Revisit if
+`mcp-remote` is ever pinned as a direct dependency (see
 `docs/development.md#open-items` — "mcp-remote is invoked unpinned") and a
 newer version's changelog mentions this class of shutdown fix.
