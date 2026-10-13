@@ -29,7 +29,7 @@
   "dependencies": {
     "@11ty/gray-matter": "3.0.0",
     "@modelcontextprotocol/sdk": "1.32.1",
-    "commander": "14.0.3",
+    "commander": "15.0.0",
     "mcp-remote": "0.8.3",
     "p-limit": "7.3.2",
     "p-retry": "8.0.1",
