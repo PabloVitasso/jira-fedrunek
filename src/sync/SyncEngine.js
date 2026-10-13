@@ -1,4 +1,4 @@
-import matter from 'gray-matter';
+import matter from '@11ty/gray-matter';
 import { buildFrontmatter, buildIssueBody } from '../markdown/MarkdownFormatter.js';
 import { parseCommentBlocks, mergeComments } from '../markdown/CommentBlockParser.js';
 
