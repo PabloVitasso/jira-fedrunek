@@ -1,5 +1,5 @@
 import path from 'node:path';
-import matter from 'gray-matter';
+import matter from '@11ty/gray-matter';
 import pLimit from 'p-limit';
 import { buildPageFrontmatter, buildToc } from '../markdown/MarkdownFormatter.js';
 import { CONCURRENCY } from '../mcp/constants.js';

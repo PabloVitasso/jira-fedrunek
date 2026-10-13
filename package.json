@@ -27,13 +27,13 @@
     "format:check": "prettier --check \"{src,tests}/**/*.js\" \"*.js\""
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.30.0",
+    "@11ty/gray-matter": "3.0.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "commander": "14.0.3",
-    "gray-matter": "4.0.3",
     "mcp-remote": "0.8.3",
     "p-limit": "7.3.2",
     "p-retry": "8.0.1",
-    "smol-toml": "1.8.0"
+    "smol-toml": "1.9.1"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
