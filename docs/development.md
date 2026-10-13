@@ -126,6 +126,22 @@ This is the same reasoning as exact-pinning direct dependencies above, one
 level deeper: don't let a `^`/`~` range - or a vulnerability fix - resolve to
 an unreviewed tarball anywhere in the tree, direct or transitive.
 
+**When there's no patched version to override to:** `gray-matter@4.0.3` (its
+last published version) pinned `js-yaml@^3.13.1`, which pulls in
+`argparse@1.x` -> `sprintf-js` - and every published `sprintf-js` version
+(up to `1.1.3`) is vulnerable to GHSA-hp3w-g68c-fv3c, so no override target
+exists. `js-yaml@4+` drops `argparse`/`sprintf-js` entirely, but it also
+removes `safeLoad`/`safeDump` (renamed to `load`/`dump`), which `gray-matter`
+calls directly in its own `lib/engines.js` - overriding `js-yaml` under
+`gray-matter` would throw at runtime, not just bump a version. The fix was
+replacing the package: swapped to `@11ty/gray-matter@3.0.0`, a maintained
+fork with the same API (this project only ever calls `matter.stringify()`,
+never parses) already updated to `js-yaml@^5.2.2` with no `argparse` in its
+tree. Check `npm ls <pkg>` for a bare, unscoped dependency chain like this
+before assuming an override will work - if the *direct* dependency is
+already at its latest version and the vulnerable path is baked into how it
+calls its own dependency, the vulnerability isn't fixable in place.
+
 **CI enforcement:** `.github/workflows/audit.yml` runs `npm audit --audit-level=moderate`
 on every push/PR to `main` and weekly on a schedule, so a newly-disclosed
 advisory in an existing (already-pinned) tree gets caught even with no local

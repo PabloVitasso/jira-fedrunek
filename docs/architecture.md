@@ -275,13 +275,13 @@ or another module's internals directly:
    skip body regen if unchanged
 3. Comments come back inline on `fields.comment.comments` — new `id` appended, changed
    `updated` replaces the block, missing ids marked `<!-- deleted_at -->`
-4. Write file via `gray-matter` stringify, update `.sync-state.json`'s `issues` section
+4. Write file via `@11ty/gray-matter` stringify, update `.sync-state.json`'s `issues` section
 
 **Confluence** (`page`/`dir`/`dirs`/`pages`/`sync` modes):
 1. Resolve target(s): a single page id, a folder's descendants (`FolderWalker`), the
    configured watch lists, or every page in the configured spaces
 2. Diff against `.sync-state.json`'s `confluence` section by `lastModified`; for more
    than one stale page, `confirmBulk` gates the download (TTY prompt, or `--yes`)
-3. Fetch stale pages concurrently (`p-limit`), write via `gray-matter` stringify with a
+3. Fetch stale pages concurrently (`p-limit`), write via `@11ty/gray-matter` stringify with a
    generated table of contents (`buildToc`)
 4. Remove orphaned manifest entries no longer present remotely, rebuild `CONTENTS.md`
