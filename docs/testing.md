@@ -122,4 +122,4 @@ this table is the single source of truth for "what's tested" until a CI badge re
 
 `node --test tests/node/*.test.js` (see `npm test` in `package.json`) — no external
 services, no network, no real Atlassian tenant, no `npx mcp-remote` subprocess spawned.
-Node >=20 (per `engines.node`).
+Node >=22 (per `engines.node`).
