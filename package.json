@@ -30,7 +30,7 @@
     "@11ty/gray-matter": "3.0.0",
     "@modelcontextprotocol/sdk": "1.32.2",
     "commander": "15.1.0",
-    "mcp-remote": "0.16.6",
+    "mcp-remote": "0.16.7",
     "p-limit": "7.3.3",
     "p-retry": "9.0.0",
     "smol-toml": "1.9.1"
